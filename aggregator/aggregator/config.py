@@ -152,8 +152,31 @@ STORES: list[StoreConfig] = [
     ),
     # Powder7 removed — site primarily sells used items
 
+    # Shopify — new additions
+    StoreConfig(
+        "Colorado Ski Shop", "coloradoskishop.com",
+        scrape_urls=[
+            "https://coloradoskishop.com/collections/clearance",
+            "https://coloradoskishop.com/collections/skis",
+        ],
+        parser_type="shopify",
+    ),
+
+    # BigCommerce — browser-based
+    StoreConfig(
+        "Peter Glenn", "peterglenn.com",
+        scrape_urls=[
+            "https://peterglenn.com/sale/",
+            "https://peterglenn.com/ski/skis/",
+            "https://peterglenn.com/ski/ski-boots/",
+        ],
+        parser_type="peterglenn",
+        use_browser=True,
+    ),
+
     # Unreachable — site appears down
     # StoreConfig("Sanction", "sanction.com", parser_type="generic"),
+    # StoreConfig("Wiredsport", "wiredsport.com", parser_type="shopify"),  # Oregon (tax-free) but site is down
 ]
 
 

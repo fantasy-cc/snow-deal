@@ -325,6 +325,11 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
         _thecircle_js(),
         'a.next, a[rel="next"], .pagination .next a',
     ),
+    "peterglenn": (
+        '.card-title',
+        _corbetts_js(),  # Same BigCommerce Stencil theme as Corbetts
+        'a[rel="next"], .pagination-item--next a, .next a',
+    ),
 }
 
 
