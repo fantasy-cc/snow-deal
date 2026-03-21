@@ -65,12 +65,14 @@ async def index(
     min_discount: float = Query(0, alias="min_discount"),
     sort: str = Query("discount_pct", alias="sort"),
     tax_free: str = Query("", alias="tax_free"),
+    q: str = Query("", alias="q"),
 ):
     tax_free_only = tax_free == "1"
     deals = await query_deals(
         category=category, store=store, min_discount=min_discount,
         sort_by=sort, limit=200,
         tax_free_only=tax_free_only, tax_free_stores=TAX_FREE_STORES,
+        q=q,
     )
 
     return templates.TemplateResponse(
@@ -87,6 +89,7 @@ async def index(
             "current_min_discount": min_discount,
             "current_sort": sort,
             "current_tax_free": tax_free,
+            "current_q": q,
         },
     )
 
@@ -119,6 +122,7 @@ async def deals_fragment(
     min_discount: float = Query(0, alias="min_discount"),
     sort: str = Query("discount_pct", alias="sort"),
     tax_free: str = Query("", alias="tax_free"),
+    q: str = Query("", alias="q"),
 ):
     """htmx partial — returns just the deal cards for dynamic filtering."""
     tax_free_only = tax_free == "1"
@@ -126,6 +130,7 @@ async def deals_fragment(
         category=category, store=store, min_discount=min_discount,
         sort_by=sort, limit=200,
         tax_free_only=tax_free_only, tax_free_stores=TAX_FREE_STORES,
+        q=q,
     )
     return templates.TemplateResponse(
         "partials/deal_cards.html",

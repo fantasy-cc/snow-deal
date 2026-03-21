@@ -75,6 +75,7 @@ async def query_deals(
     limit: int = 200,
     tax_free_only: bool = False,
     tax_free_stores: set[str] | None = None,
+    q: str = "",
     db_path: Path = DB_PATH,
 ) -> list[AggregatedDeal]:
     """Query deals with optional filters."""
@@ -91,6 +92,9 @@ async def query_deals(
         placeholders = ", ".join("?" for _ in tax_free_stores)
         clauses.append(f"store IN ({placeholders})")
         params.extend(tax_free_stores)
+    if q:
+        clauses.append("name LIKE ?")
+        params.append(f"%{q}%")
 
     where = " AND ".join(clauses)
     sort_map = {

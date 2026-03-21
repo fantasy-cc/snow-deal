@@ -16,13 +16,25 @@
         </div>
     </header>
 
+    <div class="search-bar">
+        <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+        </svg>
+        <input type="text" name="q" placeholder="Search deals..."
+               value="{{ current_q or '' }}"
+               hx-get="/deals"
+               hx-target="#deal-grid"
+               hx-include=".filters [name]"
+               hx-trigger="keyup changed delay:400ms">
+    </div>
+
     <nav class="filters">
         <div class="filter-group">
             <label>Category</label>
             <select name="category"
                     hx-get="/deals"
                     hx-target="#deal-grid"
-                    hx-include="[name='store'],[name='min_discount'],[name='sort'],[name='tax_free']">
+                    hx-include=".filters [name],[name='q']">
                 <option value="">All</option>
                 {% for cat in categories %}
                 <option value="{{ cat }}" {% if cat == current_category %}selected{% endif %}>
@@ -37,7 +49,7 @@
             <select name="store"
                     hx-get="/deals"
                     hx-target="#deal-grid"
-                    hx-include="[name='category'],[name='min_discount'],[name='sort'],[name='tax_free']">
+                    hx-include=".filters [name],[name='q']">
                 <option value="">All stores</option>
                 {% for s in stores %}
                 <option value="{{ s }}" {% if s == current_store %}selected{% endif %}>
@@ -52,7 +64,7 @@
             <select name="sort"
                     hx-get="/deals"
                     hx-target="#deal-grid"
-                    hx-include="[name='category'],[name='store'],[name='min_discount'],[name='tax_free']">
+                    hx-include=".filters [name],[name='q']">
                 <option value="discount_pct" {% if current_sort == 'discount_pct' %}selected{% endif %}>Biggest discount</option>
                 <option value="price_low" {% if current_sort == 'price_low' %}selected{% endif %}>Price: low to high</option>
                 <option value="price_high" {% if current_sort == 'price_high' %}selected{% endif %}>Price: high to low</option>
@@ -67,7 +79,7 @@
                    value="{{ current_min_discount|int }}"
                    hx-get="/deals"
                    hx-target="#deal-grid"
-                   hx-include="[name='category'],[name='store'],[name='sort'],[name='tax_free']"
+                   hx-include=".filters [name],[name='q']"
                    hx-trigger="change"
                    oninput="document.getElementById('discount-val').textContent = this.value + '%'">
         </div>
@@ -78,7 +90,7 @@
                        {% if current_tax_free == '1' %}checked{% endif %}
                        hx-get="/deals"
                        hx-target="#deal-grid"
-                       hx-include="[name='category'],[name='store'],[name='sort'],[name='min_discount']">
+                       hx-include=".filters [name],[name='q']">
                 <span class="toggle-text">Tax Free Only</span>
             </label>
         </div>
@@ -86,7 +98,7 @@
 
     <div class="result-count">{{ deal_count }} deals found</div>
 
-    <main id="deal-grid">
+    <main id="deal-grid" class="htmx-settle">
         {% include "partials/deal_cards.html" %}
     </main>
 </body>
