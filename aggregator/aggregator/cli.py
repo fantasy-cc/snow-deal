@@ -9,7 +9,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from aggregator.db import init_db, query_deals, upsert_deals, create_invite_codes, list_invite_codes
+from aggregator.db import init_db, query_deals, upsert_deals, upsert_reviews, create_invite_codes, list_invite_codes
 from aggregator.scraper import scrape_all
 
 console = Console()
@@ -43,6 +43,59 @@ def refresh(delay: float, max_pages: int) -> None:
     asyncio.run(_run())
 
 
+def _reviews_to_rows(reviews: list) -> list[dict]:
+    """Convert ReviewData list to dicts for DB upsert."""
+    from datetime import datetime
+    return [
+        {
+            "product_name": r.product_name,
+            "brand": r.brand,
+            "score": r.score,
+            "award": r.award,
+            "review_url": r.url,
+            "category": r.category,
+            "scraped_at": datetime.now().isoformat(),
+        }
+        for r in reviews
+    ]
+
+
+@cli.command()
+@click.option("--delay", "-d", type=float, default=2.0, help="Delay between requests.")
+@click.option("--source", type=click.Choice(["ogl", "tgr", "all"]), default="all",
+              help="Review source: ogl (OutdoorGearLab), tgr (The Good Ride), or all.")
+@click.option("--max-reviews", type=int, default=None,
+              help="Max reviews to scrape (TGR only, for testing).")
+def fetch_reviews(delay: float, source: str, max_reviews: int | None) -> None:
+    """Scrape product review scores from review sites."""
+    from aggregator.reviews import scrape_reviews, scrape_tgr_reviews
+
+    async def _run() -> None:
+        await init_db()
+        total = 0
+
+        if source in ("ogl", "all"):
+            with console.status("[bold cyan]Scraping OutdoorGearLab reviews...", spinner="dots"):
+                reviews = await scrape_reviews(delay=delay)
+            console.print(f"[dim]OGL: scraped {len(reviews)} reviews.[/dim]")
+            if reviews:
+                count = await upsert_reviews(_reviews_to_rows(reviews))
+                total += count
+                console.print(f"[green]OGL: saved {count} reviews.[/green]")
+
+        if source in ("tgr", "all"):
+            with console.status("[bold cyan]Scraping The Good Ride reviews...", spinner="dots"):
+                reviews = await scrape_tgr_reviews(delay=delay, max_reviews=max_reviews)
+            console.print(f"[dim]TGR: scraped {len(reviews)} reviews.[/dim]")
+            if reviews:
+                count = await upsert_reviews(_reviews_to_rows(reviews))
+                total += count
+                console.print(f"[green]TGR: saved {count} reviews.[/green]")
+
+        console.print(f"[bold green]Total: {total} reviews saved to database.[/bold green]")
+
+    asyncio.run(_run())
+
 
 @cli.command("generate-codes")
 @click.argument("count", type=int, default=10)
@@ -64,7 +117,7 @@ def generate_codes(count: int) -> None:
 
 @cli.command("list-codes")
 def list_codes_cmd() -> None:
-    """List all invite codes and their status."""
+    """List all invite codes and their usage."""
     async def _run() -> None:
         await init_db()
         codes = await list_invite_codes()
@@ -73,12 +126,11 @@ def list_codes_cmd() -> None:
             return
         table = Table(title="Invite Codes", show_lines=True)
         table.add_column("Code", style="bold cyan")
-        table.add_column("Status", justify="center")
+        table.add_column("Uses", justify="center")
         table.add_column("Created", style="dim")
-        table.add_column("Used At", style="dim")
         for c in codes:
-            status = "[red]Used[/red]" if c["used_by"] else "[green]Available[/green]"
-            table.add_row(c["code"], status, c["created_at"][:16], (c["used_at"] or "")[:16])
+            uses = str(c["use_count"])
+            table.add_row(c["code"], uses, c["created_at"][:16])
         console.print(table)
 
     asyncio.run(_run())

@@ -164,24 +164,18 @@ async def create_invite_codes(codes: list[str], db_path: Path = DB_PATH) -> int:
 
 
 async def redeem_invite_code(code: str, db_path: Path = DB_PATH) -> str | None:
-    """Redeem an invite code. Returns a session token if valid, None otherwise."""
+    """Redeem an invite code. Codes are reusable. Returns a session token if valid."""
     import secrets
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
-            "SELECT code, used_by FROM invite_codes WHERE code = ?", (code,)
+            "SELECT code FROM invite_codes WHERE code = ?", (code,)
         )
         row = await cursor.fetchone()
         if not row:
             return None
-        if row[1] is not None:
-            return None  # already used
 
         token = secrets.token_urlsafe(32)
         now = datetime.now().isoformat()
-        await db.execute(
-            "UPDATE invite_codes SET used_by = ?, used_at = ? WHERE code = ?",
-            (token, now, code),
-        )
         await db.execute(
             "INSERT INTO sessions (token, invite_code, created_at) VALUES (?, ?, ?)",
             (token, code, now),
@@ -200,11 +194,15 @@ async def validate_session(token: str, db_path: Path = DB_PATH) -> bool:
 
 
 async def list_invite_codes(db_path: Path = DB_PATH) -> list[dict]:
-    """Return all invite codes with their status."""
+    """Return all invite codes with usage counts."""
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT code, created_at, used_by, used_at FROM invite_codes ORDER BY created_at"
+            "SELECT ic.code, ic.created_at, COUNT(s.token) AS use_count "
+            "FROM invite_codes ic "
+            "LEFT JOIN sessions s ON s.invite_code = ic.code "
+            "GROUP BY ic.code "
+            "ORDER BY ic.created_at"
         )
         rows = await cursor.fetchall()
     return [dict(row) for row in rows]
