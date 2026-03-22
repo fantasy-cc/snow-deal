@@ -1,16 +1,3 @@
-
-CREATE TABLE IF NOT EXISTS invite_codes (
-    code       TEXT PRIMARY KEY,
-    created_at TEXT NOT NULL,
-    used_by    TEXT,
-    used_at    TEXT
-);
-
-CREATE TABLE IF NOT EXISTS sessions (
-    token       TEXT PRIMARY KEY,
-    invite_code TEXT NOT NULL,
-    created_at  TEXT NOT NULL
-);
 """SQLite schema and CRUD operations via aiosqlite."""
 
 from __future__ import annotations
@@ -41,6 +28,19 @@ CREATE TABLE IF NOT EXISTS deals (
 CREATE INDEX IF NOT EXISTS idx_discount  ON deals (discount_pct DESC);
 CREATE INDEX IF NOT EXISTS idx_category  ON deals (category);
 CREATE INDEX IF NOT EXISTS idx_store     ON deals (store);
+
+CREATE TABLE IF NOT EXISTS invite_codes (
+    code       TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    used_by    TEXT,
+    used_at    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token       TEXT PRIMARY KEY,
+    invite_code TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
 """
 
 
@@ -143,7 +143,6 @@ async def query_deals(
         )
         for row in rows
     ]
-
 
 
 async def create_invite_codes(codes: list[str], db_path: Path = DB_PATH) -> int:
