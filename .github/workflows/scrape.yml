@@ -35,7 +35,7 @@ jobs:
         run: snow-deals-agg -v refresh --max-pages 25
 
       - name: Fetch reviews
-        run: snow-deals-agg fetch-reviews
+        run: snow-deals-agg fetch-reviews || echo "fetch-reviews not available yet, skipping"
 
       - name: Upload deals.db as release asset
         env:
