@@ -94,19 +94,11 @@ class BlueZoneParser(BaseParser):
         if current_price is None:
             return None
 
-        image_url = None
-        img = card.select_one("img")
-        if img:
-            src = img.get("src") or img.get("data-src")
-            if src:
-                image_url = urljoin(page_url, str(src))
-
         return Product(
             name=name,
             url=url,
             current_price=current_price,
             original_price=original_price,
-            image_url=image_url,
         )
 
     def _extract_prices(self, price_el: Tag) -> tuple[float | None, float | None]:

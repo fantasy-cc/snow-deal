@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime
 
 import httpx
 
-from aggregator.categorizer import categorize
+from aggregator.categorizer import categorize, is_excluded
 from aggregator.config import STORES, StoreConfig
 from aggregator.models import AggregatedDeal
 from snow_deals.models import Product
 from snow_deals.parsers.base import BaseParser
-from snow_deals.parsers.bluezone import BlueZoneParser
-from snow_deals.parsers.shopify import ShopifyParser
 
 log = logging.getLogger(__name__)
 
@@ -39,37 +38,113 @@ def _get_semaphore(domain: str) -> asyncio.Semaphore:
     return _semaphores[domain]
 
 
+# Registry mapping parser_type -> (module_path, class_name)
+# Browser-only stores (evo, backcountry, thehouse, etc.) are handled by browser.py
+# and don't need entries here.
+_PARSER_REGISTRY: dict[str, tuple[str, str]] = {
+    "shopify":          ("snow_deals.parsers.shopify", "ShopifyParser"),
+    "bluezone":         ("snow_deals.parsers.bluezone", "BlueZoneParser"),
+    "alpineshopvt":     ("aggregator.parsers.alpineshopvt", "AlpineShopVTParser"),
+    "thecircle":        ("aggregator.parsers.thecircle", "TheCircleParser"),
+    "coloradodiscount": ("aggregator.parsers.coloradodiscount", "ColoradoDiscountParser"),
+    "sacredride":       ("aggregator.parsers.sacredride", "SacredRideParser"),
+}
+
+
 def _get_parser(parser_type: str) -> BaseParser | None:
     """Return the appropriate parser instance for a given parser type."""
-    if parser_type == "shopify":
-        return ShopifyParser()
-    elif parser_type == "bluezone":
-        return BlueZoneParser()
-
-    # Aggregator-specific BS4 parsers
+    entry = _PARSER_REGISTRY.get(parser_type)
+    if entry is None:
+        return None
+    module_path, class_name = entry
     try:
-        if parser_type == "alpineshopvt":
-            from aggregator.parsers.alpineshopvt import AlpineShopVTParser
-            return AlpineShopVTParser()
-        elif parser_type == "thecircle":
-            from aggregator.parsers.thecircle import TheCircleParser
-            return TheCircleParser()
-        elif parser_type == "coloradodiscount":
-            from aggregator.parsers.coloradodiscount import ColoradoDiscountParser
-            return ColoradoDiscountParser()
-    except ImportError as e:
-        log.error("Failed to import parser for type=%s: %s", parser_type, e)
+        import importlib
+        module = importlib.import_module(module_path)
+        return getattr(module, class_name)()
+    except (ImportError, AttributeError) as e:
+        log.error("Failed to load parser %s.%s: %s", module_path, class_name, e)
+        return None
 
-    return None
+
+_CM_PATTERN = re.compile(r'(\d+)\s*cm', re.IGNORECASE)
+_RETAIL_PATTERN = re.compile(r',?\s*Retail(?:\s+Price)?:\s*\$[\d,.]+', re.IGNORECASE)
+_PRICE_PATTERN = re.compile(r'\$[\d,.]+')
+_COLOR_JUNK = re.compile(
+    r'\b(Multicolor|Default Title|One Size|One Color)\b,?\s*', re.IGNORECASE
+)
+# Common color names to strip from sizes
+_COLORS = re.compile(
+    r'\b(Red|Blue|Green|Black|White|Grey|Gray|Navy|Orange|Yellow|Purple|Pink|Brown|'
+    r'Teal|Coral|Sage Green|Black/Black|White/White|Solid \w+)\b/?\.?\s*,?\s*',
+    re.IGNORECASE
+)
+
+
+def _clean_sizes(sizes_str: str | None) -> str | None:
+    """Clean sizes string by removing prices, colors, and junk values."""
+    if not sizes_str:
+        return None
+    s = _RETAIL_PATTERN.sub('', sizes_str)
+    # If the remaining string is mostly prices (e.g. "$0.98, $1.98, ..."), discard it
+    parts = [p.strip() for p in s.split(',') if p.strip()]
+    non_price_parts = [p for p in parts if not _PRICE_PATTERN.fullmatch(p.strip())]
+    if not non_price_parts:
+        return None
+    s = ', '.join(non_price_parts)
+    s = _COLOR_JUNK.sub('', s)
+    s = _COLORS.sub('', s)
+    s = re.sub(r',\s*,', ',', s).strip(' ,')
+    # Truncate overly long sizes
+    if len(s) > 120:
+        s = s[:117] + '...'
+    return s if s else None
+
+
+def _extract_lengths(sizes_str: str | None) -> tuple[int | None, int | None]:
+    """Extract min/max ski/snowboard lengths in cm from a sizes string.
+
+    Returns (length_min, length_max) or (None, None) if no lengths found.
+    Filters to plausible ski/board lengths (100-220cm).
+    """
+    if not sizes_str:
+        return None, None
+    lengths = [
+        int(m) for m in _CM_PATTERN.findall(sizes_str)
+        if 100 <= int(m) <= 220
+    ]
+    if not lengths:
+        return None, None
+    return min(lengths), max(lengths)
+
+
+_KIDS_KEYWORDS = re.compile(
+    r"\b(junior|jr|kids?|youth|toddler|boys|girls|infant|child|children|grom|little kid|big kid)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_kids_product(name: str) -> bool:
+    """Return True if the product name indicates kids/junior gear."""
+    return bool(_KIDS_KEYWORDS.search(name))
 
 
 def _products_to_deals(
     products: list[Product], store_name: str
 ) -> list[AggregatedDeal]:
-    """Convert snow_deals Products to AggregatedDeals with categorization."""
+    """Convert snow_deals Products to AggregatedDeals with categorization.
+
+    Filters out kids/junior products.
+    """
     now = datetime.now()
     deals: list[AggregatedDeal] = []
     for p in products:
+        if _is_kids_product(p.name) or is_excluded(p.name, p.url):
+            continue
+        if p.discount_pct <= 0:
+            continue
+        raw_sizes = ", ".join(p.sizes) if p.sizes else None
+        length_min, length_max = _extract_lengths(raw_sizes)
+        sizes_str = _clean_sizes(raw_sizes)
         deals.append(
             AggregatedDeal(
                 id=None,
@@ -79,8 +154,10 @@ def _products_to_deals(
                 current_price=p.current_price,
                 original_price=p.original_price,
                 discount_pct=p.discount_pct,
-                category=categorize(p.name, p.url),
-                image_url=p.image_url,
+                category=categorize(p.name, p.url, p.product_type or ""),
+                sizes=sizes_str,
+                length_min=length_min,
+                length_max=length_max,
                 scraped_at=now,
             )
         )
@@ -107,7 +184,7 @@ async def scrape_store(
     for url in store.scrape_urls:
         page = 0
         # For Shopify stores, convert to API URL
-        if store.parser_type == "shopify" and isinstance(parser, ShopifyParser):
+        if store.parser_type == "shopify" and hasattr(parser, "get_api_url"):
             current_url: str | None = parser.get_api_url(url)
             if not current_url:
                 log.warning("Could not get API URL for %s", url)
@@ -144,7 +221,7 @@ async def scrape_store_browser(
     store: StoreConfig,
     *,
     delay: float = 2.0,
-    max_pages: int = 3,
+    max_pages: int = 25,
 ) -> list[AggregatedDeal]:
     """Scrape a single store using Playwright headless browser."""
     try:
@@ -200,7 +277,7 @@ async def scrape_all(
     # Browser-based stores (Playwright)
     if browser_stores:
         browser_tasks = [
-            scrape_store_browser(store, delay=delay, max_pages=min(max_pages, 3))
+            scrape_store_browser(store, delay=delay, max_pages=max_pages)
             for store in browser_stores
         ]
         results = await asyncio.gather(*browser_tasks, return_exceptions=True)

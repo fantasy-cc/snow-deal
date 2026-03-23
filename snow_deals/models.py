@@ -9,7 +9,8 @@ class Product:
     url: str
     current_price: float
     original_price: float | None = None
-    image_url: str | None = None
+    sizes: list[str] | None = None
+    product_type: str | None = None
 
     @property
     def discount_pct(self) -> float:

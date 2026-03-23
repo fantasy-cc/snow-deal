@@ -43,15 +43,24 @@ class ShopifyParser(BaseParser):
             compare = variant.get("compare_at_price")
             original_price = float(compare) if compare else None
 
-            image = item.get("images", [{}])[0] if item.get("images") else {}
-            image_url = image.get("src")
+            # Extract available sizes from variants
+            sizes: list[str] = []
+            for v in item.get("variants", []):
+                if not v.get("available", True):
+                    continue
+                # Size is typically option1 or option2; check option names
+                for opt_key in ("option1", "option2", "option3"):
+                    val = v.get(opt_key)
+                    if val and val not in ("Default Title",) and val not in sizes:
+                        sizes.append(val)
 
             products.append(Product(
                 name=item.get("title", "Unknown"),
                 url=f"{origin}/products/{item.get('handle', '')}",
                 current_price=price,
                 original_price=original_price,
-                image_url=image_url,
+                sizes=sizes or None,
+                product_type=item.get("product_type") or None,
             ))
 
         log.info("Parsed %d products from %s", len(products), page_url)

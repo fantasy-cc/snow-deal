@@ -19,7 +19,6 @@ from aggregator.db import init_db
 from aggregator.web.routes import router
 from aggregator.web.invite_routes import invite_router
 from aggregator.web.admin_routes import admin_router
-from aggregator.web.event_routes import event_router
 
 log = logging.getLogger(__name__)
 
@@ -44,11 +43,10 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="snow-deals aggregator", lifespan=lifespan)
+    app = FastAPI(title="FreshPowder", lifespan=lifespan)
     app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(invite_router)
     app.include_router(admin_router)
-    app.include_router(event_router)
     app.include_router(router)
     return app

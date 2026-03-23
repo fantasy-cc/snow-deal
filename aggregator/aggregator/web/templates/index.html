@@ -3,169 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>snow-deals aggregator</title>
+    <title>FreshPowder — Ski & Snowboard Deal Aggregator</title>
+    <meta name="description" content="Find the best ski and snowboard deals across {{ stores|length }} stores. Expert-reviewed gear at the lowest prices.">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=2">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛷️</text></svg>">
 </head>
 <body>
     <header>
-        <h1>snow-deals</h1>
-        <div class="header-row">
-            <p class="subtitle">Best ski &amp; snowboard deals across {{ stores|length }} stores</p>
-            <a href="/status" class="status-link">Store Status</a>
+        <div class="header-inner">
+            <div class="header-top">
+                <div class="header-brand">
+                    <div class="logo">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 22 16 8"/>
+                            <path d="M7.5 19.5 22 5"/>
+                            <path d="M10 15l-3 3"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1>FreshPowder</h1>
+                        <p class="subtitle">Best ski & snowboard deals across {{ stores|length }} stores</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <span class="header-stat">
+                        <span class="stat-num">{{ deal_count|default(0) }}</span>
+                        <span class="stat-label">deals</span>
+                    </span>
+                    <span class="header-stat">
+                        <span class="stat-num">{{ stores|length }}</span>
+                        <span class="stat-label">stores</span>
+                    </span>
+                    <div class="header-actions">
+                        <button class="icon-btn" onclick="toggleView()" title="Toggle compact view">
+                            <svg class="icon-grid" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+                                <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                            </svg>
+                            <svg class="icon-list" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+                                <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+                        <a href="/status" class="status-link">Status</a>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 
-    <div class="search-bar">
-        <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
-        </svg>
-        <input type="text" name="q" placeholder="Search deals..."
-               value="{{ current_q or '' }}"
-               hx-get="/deals"
-               hx-target="#deal-grid"
-               hx-include=".filters [name]"
-               hx-trigger="keyup changed delay:400ms">
-    </div>
-
-    <nav class="filters">
-        <div class="filter-group">
-            <label>Category</label>
-            <select name="category"
-                    hx-get="/deals"
-                    hx-target="#deal-grid"
-                    hx-include=".filters [name],[name='q']">
-                <option value="">All</option>
-                {% for cat in categories %}
-                <option value="{{ cat }}" {% if cat == current_category %}selected{% endif %}>
-                    {{ cat|title }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="filter-group">
-            <label>Store</label>
-            <select name="store"
-                    hx-get="/deals"
-                    hx-target="#deal-grid"
-                    hx-include=".filters [name],[name='q']">
-                <option value="">All stores</option>
-                {% for s in stores %}
-                <option value="{{ s }}" {% if s == current_store %}selected{% endif %}>
-                    {{ s }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div class="filter-group">
-            <label>Sort by</label>
-            <select name="sort"
-                    hx-get="/deals"
-                    hx-target="#deal-grid"
-                    hx-include=".filters [name],[name='q']">
-                <option value="discount_pct" {% if current_sort == 'discount_pct' %}selected{% endif %}>Biggest discount</option>
-                <option value="price_low" {% if current_sort == 'price_low' %}selected{% endif %}>Price: low to high</option>
-                <option value="price_high" {% if current_sort == 'price_high' %}selected{% endif %}>Price: high to low</option>
-                <option value="store" {% if current_sort == 'store' %}selected{% endif %}>Store</option>
-                <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest</option>
-            </select>
-        </div>
-
-        <div class="filter-group">
-            <label>Min discount: <span id="discount-val">{{ current_min_discount|int }}%</span></label>
-            <input type="range" name="min_discount" min="0" max="80" step="5"
-                   value="{{ current_min_discount|int }}"
-                   hx-get="/deals"
-                   hx-target="#deal-grid"
-                   hx-include=".filters [name],[name='q']"
-                   hx-trigger="change"
-                   oninput="document.getElementById('discount-val').textContent = this.value + '%'">
-        </div>
-
-        <div class="filter-group">
-            <label class="toggle-label">
-                <input type="checkbox" name="tax_free" value="1"
-                       {% if current_tax_free == '1' %}checked{% endif %}
+    <div class="toolbar">
+        <div class="toolbar-inner">
+            <div class="search-bar">
+                <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
+                    <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+                </svg>
+                <input type="text" name="q" placeholder="Search brands, models, gear..."
+                       value="{{ current_q or '' }}"
                        hx-get="/deals"
                        hx-target="#deal-grid"
-                       hx-include=".filters [name],[name='q']">
-                <span class="toggle-text">Tax Free Only</span>
-            </label>
+                       hx-include=".filters [name]"
+                       hx-trigger="keyup changed delay:400ms">
+            </div>
+
+            <nav class="filters">
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Category</label>
+                        <select name="category"
+                                hx-get="/deals"
+                                hx-target="#deal-grid"
+                                hx-include=".filters [name],[name='q']">
+                            <option value="">All categories</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat }}" {% if cat == current_category %}selected{% endif %}>
+                                {{ cat|title }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Brand</label>
+                        <select name="brand"
+                                hx-get="/deals"
+                                hx-target="#deal-grid"
+                                hx-include=".filters [name],[name='q']">
+                            <option value="">All brands</option>
+                            {% for b in brands %}
+                            <option value="{{ b }}" {% if b == current_brand %}selected{% endif %}>
+                                {{ b }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Store</label>
+                        <select name="store"
+                                hx-get="/deals"
+                                hx-target="#deal-grid"
+                                hx-include=".filters [name],[name='q']">
+                            <option value="">All stores</option>
+                            {% for s in stores %}
+                            <option value="{{ s }}" {% if s == current_store %}selected{% endif %}>
+                                {{ s }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Sort by</label>
+                        <select name="sort"
+                                hx-get="/deals"
+                                hx-target="#deal-grid"
+                                hx-include=".filters [name],[name='q']">
+                            <option value="discount_pct" {% if current_sort == 'discount_pct' %}selected{% endif %}>Biggest discount</option>
+                            <option value="top_reviewed" {% if current_sort == 'top_reviewed' %}selected{% endif %}>Top reviewed</option>
+                            <option value="price_low" {% if current_sort == 'price_low' %}selected{% endif %}>Price: low to high</option>
+                            <option value="price_high" {% if current_sort == 'price_high' %}selected{% endif %}>Price: high to low</option>
+                            <option value="store" {% if current_sort == 'store' %}selected{% endif %}>Store</option>
+                            <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="filter-row">
+                    <div class="filter-group slider-group">
+                        <label>Min discount: <span id="discount-val">{{ current_min_discount|int }}%</span></label>
+                        <input type="range" name="min_discount" min="0" max="80" step="5"
+                               value="{{ current_min_discount|int }}"
+                               hx-get="/deals"
+                               hx-target="#deal-grid"
+                               hx-include=".filters [name],[name='q']"
+                               hx-trigger="change"
+                               oninput="document.getElementById('discount-val').textContent = this.value + '%'">
+                    </div>
+
+                    <div class="filter-group length-filter">
+                        <label>Length <span class="length-coverage">({{ length_count }} deals)</span>: <span id="length-val">{{ current_size_min or 100 }}&ndash;{{ current_size_max or 210 }} cm</span></label>
+                        <div class="dual-range">
+                            <input type="range" name="size_min" min="100" max="210" step="5"
+                                   value="{{ current_size_min or 100 }}"
+                                   class="range-min"
+                                   oninput="updateLengthRange(this, 'min')"
+                                   hx-get="/deals"
+                                   hx-target="#deal-grid"
+                                   hx-include=".filters [name],[name='q']"
+                                   hx-trigger="change">
+                            <input type="range" name="size_max" min="100" max="210" step="5"
+                                   value="{{ current_size_max or 210 }}"
+                                   class="range-max"
+                                   oninput="updateLengthRange(this, 'max')"
+                                   hx-get="/deals"
+                                   hx-target="#deal-grid"
+                                   hx-include=".filters [name],[name='q']"
+                                   hx-trigger="change">
+                        </div>
+                    </div>
+
+                    <div class="filter-toggles">
+                        <label class="toggle-label">
+                            <input type="checkbox" name="reviewed" value="1"
+                                   {% if current_reviewed == '1' %}checked{% endif %}
+                                   hx-get="/deals"
+                                   hx-target="#deal-grid"
+                                   hx-include=".filters [name],[name='q']">
+                            <span class="toggle-text">Reviewed</span>
+                        </label>
+
+                        <label class="toggle-label">
+                            <input type="checkbox" name="tax_free" value="1"
+                                   {% if current_tax_free == '1' %}checked{% endif %}
+                                   hx-get="/deals"
+                                   hx-target="#deal-grid"
+                                   hx-include=".filters [name],[name='q']">
+                            <span class="toggle-text">Tax Free</span>
+                        </label>
+                    </div>
+                </div>
+            </nav>
         </div>
-    </nav>
+    </div>
 
-    <div class="result-count">{{ deal_count }} deals found</div>
+    <div class="content-wrap">
+        <div class="result-count">
+            <span class="result-num">{{ deal_count }}</span> deals found
+        </div>
 
-    <main id="deal-grid" class="htmx-settle">
-        {% include "partials/deal_cards.html" %}
-    </main>
+        <main id="deal-grid">
+            {% include "partials/deal_cards.html" %}
+        </main>
+    </div>
+
+    <footer>
+        <div class="footer-inner">
+            <span>FreshPowder</span>
+            <span class="footer-sep">&middot;</span>
+            <span>{{ stores|length }} stores</span>
+            <span class="footer-sep">&middot;</span>
+            <span>Prices updated periodically</span>
+        </div>
+    </footer>
 
     <script>
-    /* ---- Analytics tracker ---- */
+    // Length range slider
+    function updateLengthRange(el, which) {
+        var minEl = document.querySelector('.range-min');
+        var maxEl = document.querySelector('.range-max');
+        var minVal = parseInt(minEl.value);
+        var maxVal = parseInt(maxEl.value);
+        if (which === 'min' && minVal > maxVal) { minEl.value = maxVal; minVal = maxVal; }
+        if (which === 'max' && maxVal < minVal) { maxEl.value = minVal; maxVal = minVal; }
+        var label = document.getElementById('length-val');
+        if (minVal <= 100 && maxVal >= 210) {
+            label.textContent = 'All';
+            minEl.name = ''; maxEl.name = '';
+        } else {
+            label.textContent = minVal + '\u2013' + maxVal + ' cm';
+            minEl.name = 'size_min'; maxEl.name = 'size_max';
+        }
+    }
     (function() {
-        function trackEvent(data) {
-            fetch('/api/event', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data),
-            }).catch(function() {});
+        var minEl = document.querySelector('.range-min');
+        var maxEl = document.querySelector('.range-max');
+        if (minEl && maxEl && parseInt(minEl.value) <= 100 && parseInt(maxEl.value) >= 210) {
+            minEl.name = ''; maxEl.name = '';
+            document.getElementById('length-val').textContent = 'All';
         }
-
-        // Track page view
-        trackEvent({event_type: 'page_view'});
-
-        // Track deal clicks
-        function attachClickTrackers() {
-            document.querySelectorAll('.deal-card[data-store]').forEach(function(card) {
-                if (card._tracked) return;
-                card._tracked = true;
-                card.addEventListener('click', function() {
-                    trackEvent({
-                        event_type: 'click',
-                        deal_url: card.getAttribute('href'),
-                        deal_name: card.dataset.dealName,
-                        store: card.dataset.store,
-                        category: card.dataset.category || null,
-                    });
-                });
-            });
-        }
-        attachClickTrackers();
-
-        // Track filter changes
-        document.querySelectorAll('.filters select, .filters input').forEach(function(el) {
-            el.addEventListener('change', function() {
-                var label = el.name;
-                var val = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value;
-                trackEvent({
-                    event_type: 'filter',
-                    metadata: label + '=' + val,
-                });
-            });
-        });
-
-        // Track search
-        var searchInput = document.querySelector('input[name="q"]');
-        if (searchInput) {
-            var searchTimer;
-            searchInput.addEventListener('input', function() {
-                clearTimeout(searchTimer);
-                var q = searchInput.value;
-                searchTimer = setTimeout(function() {
-                    if (q.length >= 2) {
-                        trackEvent({event_type: 'search', metadata: q});
-                    }
-                }, 1000);
-            });
-        }
-
-        // Re-attach click trackers after HTMX swaps
-        document.body.addEventListener('htmx:afterSwap', function() {
-            attachClickTrackers();
-        });
     })();
+
+    function toggleView() {
+        var grid = document.querySelector('#deal-grid');
+        grid.classList.toggle('compact-view');
+        localStorage.setItem('viewMode', grid.classList.contains('compact-view') ? 'compact' : 'grid');
+    }
+    if (localStorage.getItem('viewMode') === 'compact') {
+        document.querySelector('#deal-grid').classList.add('compact-view');
+    }
+
+    function markNewDeals() {
+        var lastVisit = localStorage.getItem('lastVisit');
+        if (lastVisit) {
+            document.querySelectorAll('.deal-card[data-scraped]').forEach(function(card) {
+                if (card.dataset.scraped > lastVisit && !card.querySelector('.new-badge')) {
+                    var badge = document.createElement('span');
+                    badge.className = 'new-badge';
+                    badge.textContent = 'NEW';
+                    card.appendChild(badge);
+                }
+            });
+        }
+        setTimeout(function() {
+            localStorage.setItem('lastVisit', new Date().toISOString());
+        }, 3000);
+    }
+    markNewDeals();
+
+    function syncFiltersToUrl() {
+        var params = new URLSearchParams();
+        document.querySelectorAll('.filters [name], [name="q"]').forEach(function(el) {
+            if (!el.name) return;
+            if (el.type === 'checkbox' && !el.checked) return;
+            if (el.value && el.value !== '' && el.value !== '0') {
+                params.set(el.name, el.value);
+            }
+        });
+        var url = '/' + (params.toString() ? '?' + params.toString() : '');
+        history.replaceState(null, '', url);
+    }
+
+    document.body.addEventListener('htmx:afterSwap', function() {
+        markNewDeals();
+        syncFiltersToUrl();
+        if (localStorage.getItem('viewMode') === 'compact') {
+            document.querySelector('#deal-grid').classList.add('compact-view');
+        }
+    });
     </script>
 </body>
 </html>

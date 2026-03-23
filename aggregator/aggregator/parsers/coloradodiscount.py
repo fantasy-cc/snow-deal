@@ -9,15 +9,9 @@ from bs4 import BeautifulSoup, Tag
 from snow_deals.models import Product
 from snow_deals.parsers.base import BaseParser
 
+from aggregator.parsers.common import parse_price as _parse_price
+
 log = logging.getLogger(__name__)
-
-
-def _parse_price(text: str) -> float | None:
-    """Extract a numeric price from text like '$1,250.00' or '579.99'."""
-    match = re.search(r"\$?([\d,]+\.?\d*)", text.strip())
-    if match:
-        return float(match.group(1).replace(",", ""))
-    return None
 
 
 class ColoradoDiscountParser(BaseParser):
@@ -93,18 +87,9 @@ class ColoradoDiscountParser(BaseParser):
             original_price = parsed_prices[0]
             current_price = parsed_prices[1]
 
-        # Image
-        image_url = None
-        img = li.select_one("img")
-        if img:
-            src = img.get("src") or img.get("data-src")
-            if src:
-                image_url = urljoin(page_url, str(src))
-
         return Product(
             name=name,
             url=url,
             current_price=current_price,
             original_price=original_price,
-            image_url=image_url,
         )

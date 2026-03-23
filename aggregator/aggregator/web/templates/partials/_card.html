@@ -1,0 +1,51 @@
+<div class="deal-card{% if review_map and d.id in review_map and review_map[d.id].score >= 80 %} reviewed-high{% elif review_map and d.id in review_map %} reviewed{% endif %}"
+     data-href="{{ d.url }}" data-scraped="{{ d.scraped_at.isoformat() }}"
+     onclick="window.open(this.dataset.href, '_blank')" style="cursor:pointer">
+    {% if d.discount_pct >= 30 %}
+    <span class="badge high">-{{ d.discount_pct|int }}%</span>
+    {% elif d.discount_pct >= 15 %}
+    <span class="badge mid">-{{ d.discount_pct|int }}%</span>
+    {% elif d.discount_pct > 0 %}
+    <span class="badge low">-{{ d.discount_pct|int }}%</span>
+    {% endif %}
+    <div class="card-body">
+        <div class="name">{{ d.name }}</div>
+        <div class="meta">
+            <span class="store">{{ d.store }}</span>
+            {% if d.category %}
+            <span class="category-tag">{{ d.category }}</span>
+            {% endif %}
+            {% if tax_free_stores and d.store in tax_free_stores %}
+            <span class="tax-free-tag">Tax Free</span>
+            {% endif %}
+        </div>
+        {% if review_map and d.id in review_map %}
+        <div class="review-row">
+            <span class="review-score score-{{ 'high' if review_map[d.id].score >= 80 else ('mid' if review_map[d.id].score >= 60 else 'low') }}">
+                {{ review_map[d.id].score }}/100
+            </span>
+            {% if review_map[d.id].award %}
+            <span class="review-award">{{ review_map[d.id].award }}</span>
+            {% endif %}
+            <a href="{{ review_map[d.id].url }}" class="review-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">Read review</a>
+        </div>
+        {% endif %}
+        <div class="prices">
+            {% if cad_stores is defined and d.store in cad_stores %}
+            <span class="sale-price">C${{ "%.2f"|format(d.current_price) }}</span>
+            {% if d.original_price %}
+            <span class="orig-price">C${{ "%.2f"|format(d.original_price) }}</span>
+            {% endif %}
+            <span class="currency-tag">CAD</span>
+            {% else %}
+            <span class="sale-price">${{ "%.2f"|format(d.current_price) }}</span>
+            {% if d.original_price %}
+            <span class="orig-price">${{ "%.2f"|format(d.original_price) }}</span>
+            {% endif %}
+            {% endif %}
+        </div>
+        {% if d.sizes %}
+        <div class="sizes-row">{{ d.sizes }}</div>
+        {% endif %}
+    </div>
+</div>

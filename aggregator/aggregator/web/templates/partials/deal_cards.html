@@ -1,38 +1,22 @@
-{% if deal_count is defined %}
+{% if deal_count is defined and deal_count is not none %}
 <div class="result-count-update" hx-swap-oob="innerHTML:.result-count">{{ deal_count }} deals found</div>
 {% endif %}
 {% if deals %}
 <div class="deal-grid">
     {% for d in deals %}
-    <a class="deal-card" href="{{ d.url }}" target="_blank" rel="noopener"
-       data-store="{{ d.store }}" data-deal-name="{{ d.name }}" data-category="{{ d.category or '' }}">
-        {% if d.discount_pct >= 30 %}
-        <span class="badge high">-{{ d.discount_pct|int }}%</span>
-        {% elif d.discount_pct >= 15 %}
-        <span class="badge mid">-{{ d.discount_pct|int }}%</span>
-        {% elif d.discount_pct > 0 %}
-        <span class="badge low">-{{ d.discount_pct|int }}%</span>
-        {% endif %}
-        <div class="card-body">
-            <div class="name">{{ d.name }}</div>
-            <div class="meta">
-                <span class="store">{{ d.store }}</span>
-                {% if d.category %}
-                <span class="category-tag">{{ d.category }}</span>
-                {% endif %}
-                {% if tax_free_stores and d.store in tax_free_stores %}
-                <span class="tax-free-tag">Tax Free</span>
-                {% endif %}
-            </div>
-            <div class="prices">
-                <span class="sale-price">${{ "%.2f"|format(d.current_price) }}</span>
-                {% if d.original_price %}
-                <span class="orig-price">${{ "%.2f"|format(d.original_price) }}</span>
-                {% endif %}
-            </div>
-        </div>
-    </a>
+    {% include "partials/_card.html" %}
     {% endfor %}
+    {% if has_more %}
+    <div class="load-more-wrap">
+        <button class="load-more-btn"
+                hx-get="/deals?offset={{ next_offset }}"
+                hx-include=".filters [name],[name='q']"
+                hx-swap="outerHTML"
+                hx-target="closest .load-more-wrap">
+            Load more deals
+        </button>
+    </div>
+    {% endif %}
 </div>
 {% else %}
 <div class="empty-state">No deals found. Try adjusting filters or run <code>snow-deals-agg refresh</code>.</div>

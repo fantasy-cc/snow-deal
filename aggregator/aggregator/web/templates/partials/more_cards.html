@@ -1,0 +1,14 @@
+{% for d in deals %}
+{% include "partials/_card.html" %}
+{% endfor %}
+{% if has_more %}
+<div class="load-more-wrap" style="grid-column: 1 / -1;">
+    <button class="load-more-btn"
+            hx-get="/deals?offset={{ next_offset }}"
+            hx-include=".filters [name],[name='q']"
+            hx-target="this"
+            hx-swap="outerHTML">
+        Load more deals
+    </button>
+</div>
+{% endif %}

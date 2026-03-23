@@ -27,7 +27,7 @@ def cli(verbose: bool) -> None:
 
 @cli.command()
 @click.option("--delay", "-d", type=float, default=1.0, help="Delay between requests.")
-@click.option("--max-pages", type=int, default=10, help="Max pages per store.")
+@click.option("--max-pages", type=int, default=25, help="Max pages per store.")
 def refresh(delay: float, max_pages: int) -> None:
     """Scrape all stores and update the database."""
     async def _run() -> None:

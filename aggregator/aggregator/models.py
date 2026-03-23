@@ -18,5 +18,7 @@ class AggregatedDeal:
     original_price: float | None
     discount_pct: float
     category: str | None
-    image_url: str | None
+    sizes: str | None  # Comma-separated available sizes
+    length_min: int | None  # Shortest length in cm (extracted from sizes)
+    length_max: int | None  # Longest length in cm (extracted from sizes)
     scraped_at: datetime
