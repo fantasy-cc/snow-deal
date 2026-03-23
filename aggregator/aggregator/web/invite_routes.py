@@ -19,7 +19,9 @@ invite_router = APIRouter()
 
 @invite_router.get("/invite", response_class=HTMLResponse)
 async def invite_page(request: Request):
-    return templates.TemplateResponse("invite.html", {"request": request, "error": None})
+    return templates.TemplateResponse(
+        request=request, name="invite.html", context={"error": None},
+    )
 
 
 @invite_router.post("/invite", response_class=HTMLResponse)
@@ -27,8 +29,8 @@ async def invite_submit(request: Request, code: str = Form(...)):
     token = await redeem_invite_code(code.strip().upper())
     if not token:
         return templates.TemplateResponse(
-            "invite.html",
-            {"request": request, "error": "Invalid or already-used invite code."},
+            request=request, name="invite.html",
+            context={"error": "Invalid or exhausted invite code."},
         )
     response = RedirectResponse(url="/", status_code=302)
     response.set_cookie(SESSION_COOKIE, token, httponly=True, max_age=86400 * 365)
