@@ -45,10 +45,22 @@ CREATE TABLE IF NOT EXISTS reviews (
 """
 
 
+MIGRATIONS = [
+    "ALTER TABLE deals ADD COLUMN sizes TEXT",
+    "ALTER TABLE deals ADD COLUMN length_min INTEGER",
+    "ALTER TABLE deals ADD COLUMN length_max INTEGER",
+]
+
+
 async def init_db(db_path: Path = DB_PATH) -> None:
     """Create the deals table if it doesn't exist."""
     async with aiosqlite.connect(db_path) as db:
         await db.executescript(SCHEMA)
+        for migration in MIGRATIONS:
+            try:
+                await db.execute(migration)
+            except Exception:
+                pass  # column already exists
         await db.commit()
 
 
