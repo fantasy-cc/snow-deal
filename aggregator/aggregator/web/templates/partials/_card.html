@@ -1,5 +1,5 @@
 <div class="deal-card{% if review_map and d.id in review_map and review_map[d.id].score >= 80 %} reviewed-high{% elif review_map and d.id in review_map %} reviewed{% endif %}"
-     data-href="{{ d.url }}" data-scraped="{{ d.scraped_at.isoformat() }}"
+     data-href="{{ d.url }}" data-scraped="{{ d.scraped_at.isoformat() }}" data-store="{{ d.store }}" data-deal-name="{{ d.name }}" data-category="{{ d.category or '' }}"
      onclick="window.open(this.dataset.href, '_blank')" style="cursor:pointer">
     {% if d.discount_pct >= 30 %}
     <span class="badge high">-{{ d.discount_pct|int }}%</span>
