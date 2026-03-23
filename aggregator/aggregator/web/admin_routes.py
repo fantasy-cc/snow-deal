@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from aggregator.auth import require_invite
-from aggregator.db import create_invite_codes, list_invite_codes
+from aggregator.auth_db import create_invite_codes, list_invite_codes
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))

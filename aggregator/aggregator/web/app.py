@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 import aggregator.auth as auth
 from aggregator.auth import auth_middleware
 from aggregator.db import init_db
+from aggregator.auth_db import init_auth_db
 from aggregator.web.routes import router
 from aggregator.web.invite_routes import invite_router
 from aggregator.web.admin_routes import admin_router
@@ -32,6 +33,7 @@ templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await init_auth_db()
     # Auto-generate admin key for local development if not set
     if not auth.ADMIN_KEY:
         auth.ADMIN_KEY = secrets.token_urlsafe(16)

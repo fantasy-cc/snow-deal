@@ -1,15 +1,15 @@
-"""Invite-only authentication middleware."""
+"""Invite-only authentication middleware with JWT sessions."""
 
 from __future__ import annotations
 
 import os
 
+import jwt
 from fastapi import Request, Response
 from fastapi.responses import RedirectResponse
 
-from aggregator.db import validate_session
-
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod")
 SESSION_COOKIE = "snow_deals_session"
 
 # Paths that don't require authentication
@@ -20,11 +20,29 @@ def _is_public(path: str) -> bool:
     return any(path.startswith(p) for p in PUBLIC_PATHS)
 
 
-async def require_invite(request: Request) -> str | None:
-    """Check if the request has a valid session. Returns session token or None.
+def create_session_token(invite_code: str) -> str:
+    """Create a signed JWT containing the invite code."""
+    from datetime import datetime, timezone
+    payload = {
+        "sub": invite_code,
+        "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-    Used as a FastAPI dependency — but auth enforcement is done via middleware
-    so we can redirect rather than raise 403.
+
+def verify_session_token(token: str) -> str | None:
+    """Verify a JWT session token. Returns the invite code or None."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        return payload.get("sub")
+    except (jwt.InvalidTokenError, jwt.DecodeError):
+        return None
+
+
+async def require_invite(request: Request) -> str | None:
+    """Check if the request has a valid session.
+
+    Returns "admin" for admin users, the invite code for JWT sessions, or None.
     """
     # Admin bypass via env var
     if ADMIN_KEY:
@@ -33,9 +51,12 @@ async def require_invite(request: Request) -> str | None:
         if request.query_params.get("admin_key") == ADMIN_KEY:
             return "admin"
 
+    # JWT session cookie
     token = request.cookies.get(SESSION_COOKIE)
-    if token and await validate_session(token):
-        return token
+    if token:
+        invite_code = verify_session_token(token)
+        if invite_code:
+            return invite_code
     return None
 
 

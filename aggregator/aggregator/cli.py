@@ -9,7 +9,8 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from aggregator.db import init_db, query_deals, upsert_deals, upsert_reviews, create_invite_codes, list_invite_codes
+from aggregator.db import init_db, query_deals, upsert_deals, upsert_reviews
+from aggregator.auth_db import init_auth_db, create_invite_codes, list_invite_codes
 from aggregator.scraper import scrape_all
 
 console = Console()
@@ -106,7 +107,7 @@ def generate_codes(count: int) -> None:
     codes = [secrets.token_hex(4).upper() for _ in range(count)]
 
     async def _run() -> None:
-        await init_db()
+        await init_auth_db()
         created = await create_invite_codes(codes)
         console.print(f"[green]Created {created} invite codes:[/green]")
         for code in codes:
@@ -119,7 +120,7 @@ def generate_codes(count: int) -> None:
 def list_codes_cmd() -> None:
     """List all invite codes and their usage."""
     async def _run() -> None:
-        await init_db()
+        await init_auth_db()
         codes = await list_invite_codes()
         if not codes:
             console.print("[yellow]No invite codes found.[/yellow]")

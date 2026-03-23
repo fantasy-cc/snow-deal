@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from aggregator.auth import require_invite, SESSION_COOKIE
-from aggregator.db import log_event, get_click_stats
+from aggregator.auth_db import log_event, get_click_stats
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))

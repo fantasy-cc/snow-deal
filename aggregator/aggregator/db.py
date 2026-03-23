@@ -31,20 +31,6 @@ CREATE INDEX IF NOT EXISTS idx_discount  ON deals (discount_pct DESC);
 CREATE INDEX IF NOT EXISTS idx_category  ON deals (category);
 CREATE INDEX IF NOT EXISTS idx_store     ON deals (store);
 
-CREATE TABLE IF NOT EXISTS invite_codes (
-    code       TEXT PRIMARY KEY,
-    created_at TEXT NOT NULL,
-    max_uses   INTEGER NOT NULL DEFAULT 5,
-    used_by    TEXT,
-    used_at    TEXT
-);
-
-CREATE TABLE IF NOT EXISTS sessions (
-    token       TEXT PRIMARY KEY,
-    invite_code TEXT NOT NULL,
-    created_at  TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS reviews (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     product_name  TEXT    NOT NULL,
@@ -56,40 +42,13 @@ CREATE TABLE IF NOT EXISTS reviews (
     scraped_at    TEXT    NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS events (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type TEXT    NOT NULL,
-    session    TEXT,
-    deal_url   TEXT,
-    deal_name  TEXT,
-    store      TEXT,
-    category   TEXT,
-    metadata   TEXT,
-    created_at TEXT    NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_events_type ON events (event_type);
-CREATE INDEX IF NOT EXISTS idx_events_time ON events (created_at);
-CREATE INDEX IF NOT EXISTS idx_events_store ON events (store);
 """
-
-MIGRATIONS = [
-    "ALTER TABLE invite_codes ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 5",
-    "ALTER TABLE deals ADD COLUMN sizes TEXT",
-    "ALTER TABLE deals ADD COLUMN length_min INTEGER",
-    "ALTER TABLE deals ADD COLUMN length_max INTEGER",
-]
 
 
 async def init_db(db_path: Path = DB_PATH) -> None:
     """Create the deals table if it doesn't exist."""
     async with aiosqlite.connect(db_path) as db:
         await db.executescript(SCHEMA)
-        for migration in MIGRATIONS:
-            try:
-                await db.execute(migration)
-            except Exception:
-                pass  # column already exists
         await db.commit()
 
 
@@ -283,172 +242,6 @@ async def get_all_reviews(db_path: Path = DB_PATH) -> list[dict]:
         )
         rows = await cursor.fetchall()
     return [dict(row) for row in rows]
-
-
-async def create_invite_codes(codes: list[str], max_uses: int = 5, db_path: Path = DB_PATH) -> int:
-    """Insert invite codes. Returns count created."""
-    now = datetime.now().isoformat()
-    async with aiosqlite.connect(db_path) as db:
-        count = 0
-        for code in codes:
-            try:
-                await db.execute(
-                    "INSERT INTO invite_codes (code, created_at, max_uses) VALUES (?, ?, ?)",
-                    (code, now, max_uses),
-                )
-                count += 1
-            except aiosqlite.IntegrityError:
-                pass  # duplicate code, skip
-        await db.commit()
-    return count
-
-
-async def redeem_invite_code(code: str, db_path: Path = DB_PATH) -> str | None:
-    """Redeem an invite code. Returns a session token if valid and under max_uses limit."""
-    import secrets
-    async with aiosqlite.connect(db_path) as db:
-        cursor = await db.execute(
-            "SELECT code, max_uses FROM invite_codes WHERE code = ?", (code,)
-        )
-        row = await cursor.fetchone()
-        if not row:
-            return None
-
-        max_uses = row[1]
-        cursor = await db.execute(
-            "SELECT COUNT(*) FROM sessions WHERE invite_code = ?", (code,)
-        )
-        use_count = (await cursor.fetchone())[0]
-        if use_count >= max_uses:
-            return None
-
-        token = secrets.token_urlsafe(32)
-        now = datetime.now().isoformat()
-        await db.execute(
-            "INSERT INTO sessions (token, invite_code, created_at) VALUES (?, ?, ?)",
-            (token, code, now),
-        )
-        await db.commit()
-    return token
-
-
-async def validate_session(token: str, db_path: Path = DB_PATH) -> bool:
-    """Return True if the session token is valid."""
-    async with aiosqlite.connect(db_path) as db:
-        cursor = await db.execute(
-            "SELECT token FROM sessions WHERE token = ?", (token,)
-        )
-        return await cursor.fetchone() is not None
-
-
-async def list_invite_codes(db_path: Path = DB_PATH) -> list[dict]:
-    """Return all invite codes with usage counts."""
-    async with aiosqlite.connect(db_path) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT ic.code, ic.created_at, ic.max_uses, COUNT(s.token) AS use_count "
-            "FROM invite_codes ic "
-            "LEFT JOIN sessions s ON s.invite_code = ic.code "
-            "GROUP BY ic.code "
-            "ORDER BY ic.created_at"
-        )
-        rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
-
-
-async def log_event(
-    event_type: str,
-    session: str | None = None,
-    deal_url: str | None = None,
-    deal_name: str | None = None,
-    store: str | None = None,
-    category: str | None = None,
-    metadata: str | None = None,
-    db_path: Path = DB_PATH,
-) -> None:
-    """Log a user event (page view, click, filter, etc.)."""
-    now = datetime.now().isoformat()
-    async with aiosqlite.connect(db_path) as db:
-        await db.execute(
-            "INSERT INTO events (event_type, session, deal_url, deal_name, store, category, metadata, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (event_type, session, deal_url, deal_name, store, category, metadata, now),
-        )
-        await db.commit()
-
-
-async def get_click_stats(days: int = 7, db_path: Path = DB_PATH) -> dict:
-    """Get click-through statistics for the admin dashboard."""
-    from datetime import timedelta
-    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-
-    async with aiosqlite.connect(db_path) as db:
-        db.row_factory = aiosqlite.Row
-
-        cursor = await db.execute(
-            "SELECT event_type, COUNT(*) AS cnt FROM events "
-            "WHERE created_at >= ? GROUP BY event_type ORDER BY cnt DESC",
-            (cutoff,),
-        )
-        by_type = [dict(r) for r in await cursor.fetchall()]
-
-        cursor = await db.execute(
-            "SELECT store, COUNT(*) AS cnt FROM events "
-            "WHERE event_type = 'click' AND created_at >= ? AND store IS NOT NULL "
-            "GROUP BY store ORDER BY cnt DESC",
-            (cutoff,),
-        )
-        clicks_by_store = [dict(r) for r in await cursor.fetchall()]
-
-        cursor = await db.execute(
-            "SELECT deal_name, store, deal_url, COUNT(*) AS cnt FROM events "
-            "WHERE event_type = 'click' AND created_at >= ? AND deal_name IS NOT NULL "
-            "GROUP BY deal_url ORDER BY cnt DESC LIMIT 20",
-            (cutoff,),
-        )
-        top_deals = [dict(r) for r in await cursor.fetchall()]
-
-        cursor = await db.execute(
-            "SELECT DATE(created_at) AS day, COUNT(*) AS cnt FROM events "
-            "WHERE event_type = 'click' AND created_at >= ? "
-            "GROUP BY day ORDER BY day",
-            (cutoff,),
-        )
-        clicks_by_day = [dict(r) for r in await cursor.fetchall()]
-
-        cursor = await db.execute(
-            "SELECT DATE(created_at) AS day, COUNT(*) AS cnt FROM events "
-            "WHERE event_type = 'page_view' AND created_at >= ? "
-            "GROUP BY day ORDER BY day",
-            (cutoff,),
-        )
-        views_by_day = [dict(r) for r in await cursor.fetchall()]
-
-        cursor = await db.execute(
-            "SELECT COUNT(DISTINCT session) AS cnt FROM events "
-            "WHERE created_at >= ? AND session IS NOT NULL",
-            (cutoff,),
-        )
-        unique_sessions = (await cursor.fetchone())["cnt"]
-
-        cursor = await db.execute(
-            "SELECT metadata, COUNT(*) AS cnt FROM events "
-            "WHERE event_type = 'filter' AND created_at >= ? AND metadata IS NOT NULL "
-            "GROUP BY metadata ORDER BY cnt DESC LIMIT 15",
-            (cutoff,),
-        )
-        filter_usage = [dict(r) for r in await cursor.fetchall()]
-
-    return {
-        "by_type": by_type,
-        "clicks_by_store": clicks_by_store,
-        "top_deals": top_deals,
-        "clicks_by_day": clicks_by_day,
-        "views_by_day": views_by_day,
-        "unique_sessions": unique_sessions,
-        "filter_usage": filter_usage,
-        "days": days,
-    }
 
 
 async def store_status(db_path: Path = DB_PATH) -> list[dict]:
