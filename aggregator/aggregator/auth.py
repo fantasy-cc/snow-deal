@@ -39,19 +39,26 @@ async def require_invite(request: Request) -> str | None:
     return None
 
 
+def _maybe_set_admin_cookie(request: Request, response: Response) -> None:
+    """Set admin_key cookie if authenticated via query param but cookie not yet set."""
+    if ADMIN_KEY and not request.cookies.get("admin_key"):
+        admin_key = request.query_params.get("admin_key")
+        if admin_key == ADMIN_KEY:
+            response.set_cookie("admin_key", admin_key, httponly=True, max_age=86400 * 365)
+
+
 async def auth_middleware(request: Request, call_next):
     """Middleware that enforces invite-only access."""
     if _is_public(request.url.path):
-        return await call_next(request)
+        response = await call_next(request)
+        _maybe_set_admin_cookie(request, response)
+        return response
 
     session = await require_invite(request)
     if session:
         response = await call_next(request)
-        # Set admin cookie if authenticated via query param
-        if session == "admin" and not request.cookies.get("admin_key"):
-            admin_key = request.query_params.get("admin_key")
-            if admin_key:
-                response.set_cookie("admin_key", admin_key, httponly=True, max_age=86400 * 365)
+        if session == "admin":
+            _maybe_set_admin_cookie(request, response)
         return response
 
     return RedirectResponse(url="/invite", status_code=302)
