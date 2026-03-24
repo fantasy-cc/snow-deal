@@ -67,11 +67,11 @@ class TestMatchReview:
         result = match_review_to_deal("Atomic Bent 100", [])
         assert result is None
 
-    def test_model_number_mismatch(self):
-        """Different model numbers should not match."""
+    def test_model_number_family_match(self):
+        """Different model numbers in same family should match via family fallback."""
         reviews = [_make_review("Atomic Bent 100", "Atomic")]
         result = match_review_to_deal("Atomic Bent 120 Skis", reviews)
-        assert result is None
+        assert result is not None  # Family match: same ski line, different width
 
     def test_best_match_selected(self):
         reviews = [

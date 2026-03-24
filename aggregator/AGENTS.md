@@ -2,14 +2,16 @@
 
 ## Project Overview
 
-**snow-deals aggregator** is a sub-project within the snow-deals monorepo that scrapes 24 ski and snowboard retailers, stores deal snapshots in SQLite, and serves a ranked deal dashboard via FastAPI + htmx. It integrates product review scores from OutdoorGearLab (ski/boot/gear reviews, 0-100 scale) and The Good Ride (1000+ snowboard reviews, qualitative-to-numeric conversion). It uses Playwright headless browser for JS-rendered and anti-bot sites, httpx/BeautifulSoup for static sites, and reuses `ShopifyParser` and `BlueZoneParser` from the parent `snow_deals` package. Users interact through a Click CLI (scrape/query/fetch-reviews) or a browser-based UI with live filtering by category, store, brand, discount, ski/snowboard length range, review status, and tax-free status.
+**Awesome Snow Deals** (aggregator sub-project within the snow-deals monorepo) scrapes 24 ski and snowboard retailers, stores deal snapshots in SQLite, and serves a ranked deal dashboard via FastAPI + htmx. It integrates product review scores from OutdoorGearLab (ski/boot/gear reviews, 0-100 scale) and The Good Ride (1000+ snowboard reviews, qualitative-to-numeric conversion). It uses Playwright headless browser for JS-rendered and anti-bot sites, httpx/BeautifulSoup for static sites, and reuses `ShopifyParser` and `BlueZoneParser` from the parent `snow_deals` package. Users interact through a Click CLI (scrape/query/fetch-reviews) or a browser-based UI with live filtering by category, store, brand, discount, ski/snowboard length range, review status, and tax-free status. Includes invite-only auth with reusable invite codes (max 5 uses each), admin panel for code management, and lightweight client-side analytics tracking (clicks, page views, filters, searches).
 
 ## Tech Stack
 
 - **Language:** Python 3.11+
 - **Web framework:** FastAPI >= 0.110, uvicorn >= 0.29
 - **Templating:** Jinja2 >= 3.1, htmx 2.x (CDN, no build step)
-- **Database:** SQLite via aiosqlite >= 0.20 (path configurable via `DATABASE_PATH` env var)
+- **Database:** SQLite via aiosqlite >= 0.20 for deals/reviews (path configurable via `DATABASE_PATH` env var)
+- **Auth database:** Turso cloud SQLite via libsql >= 0.1 (invite codes, events) — falls back to local SQLite for dev
+- **Auth:** PyJWT >= 2.8 for stateless session cookies
 - **Deployment:** Render (free tier, Docker) + GitHub Actions (cron scraping every 6 hours)
 - **HTTP client:** httpx >= 0.27 (async)
 - **Browser automation:** Playwright (headless Chromium with anti-bot stealth)
@@ -29,15 +31,16 @@ aggregator/
 ├── deals.db                     # SQLite database (gitignored)
 ├── aggregator/
 │   ├── __init__.py
-│   ├── config.py                # Store registry (24 stores), category keywords, exclude keywords, brand sets, tax_free flags
+│   ├── config.py                # Store registry (24 stores), category keywords, exclude keywords, brand/model/boot name sets, multi-word model names, tax_free flags
 │   ├── models.py                # AggregatedDeal dataclass (with sizes, length_min, length_max fields)
-│   ├── categorizer.py           # Keyword + brand-based product → category mapping with exclusion filter
-│   ├── db.py                    # SQLite schema (deals + reviews tables), init, upsert, query, store_status
+│   ├── categorizer.py           # Keyword + brand-based product → category mapping with boot disambiguation and exclusion filter
+│   ├── db.py                    # SQLite schema (deals, reviews), CRUD, migrations for sizes/length columns
+│   ├── auth_db.py               # Turso cloud SQLite for auth (invite_codes, sessions, events) — local SQLite fallback for dev
 │   ├── scraper.py               # Multi-store async orchestrator with dynamic parser registry, sizes cleaning, length extraction
-│   ├── reviews.py               # OGL + TGR review scrapers, fuzzy product matcher
+│   ├── reviews.py               # OGL + TGR review scrapers (7 TGR sitemaps), two-pass fuzzy matcher with family fallback, model-to-brand lookup
 │   ├── browser.py               # Playwright-based scraper with per-store JS extractors (9 stores)
 │   ├── cli.py                   # Click CLI (refresh, deals, fetch-reviews, generate-codes, list-codes)
-│   ├── auth.py                  # Invite-only auth middleware + admin bypass via ADMIN_KEY env var
+│   ├── auth.py                  # JWT session auth middleware + admin bypass via ADMIN_KEY env var (no DB lookup for session validation)
 │   ├── parsers/
 │   │   ├── __init__.py          # Parser registry docs
 │   │   ├── common.py            # Shared parse_price() used by all BS4 parsers
@@ -47,19 +50,23 @@ aggregator/
 │   │   └── sacredride.py        # Sacred Ride (WooCommerce)
 │   └── web/
 │       ├── __init__.py
-│       ├── app.py               # FastAPI app factory (lifespan init_db, auth middleware)
+│       ├── app.py               # FastAPI app factory (lifespan init_db, auth middleware, all routers)
 │       ├── routes.py            # Page + htmx partial + status dashboard routes
 │       ├── invite_routes.py     # GET/POST /invite for invite code entry
+│       ├── admin_routes.py      # GET/POST /admin/codes for invite code management
+│       ├── event_routes.py      # POST /api/event (analytics tracking) + GET /admin/stats (dashboard)
 │       ├── templates/
-│       │   ├── index.html       # Main deals page with sticky toolbar, filters (search, category, brand, store, sort, length range, reviewed, tax-free)
+│       │   ├── index.html       # Main deals page with sticky toolbar, filters (search, category, brand, store, sort, length range, reviewed, tax-free) + analytics JS
 │       │   ├── invite.html      # Invite code entry page (dark-themed)
 │       │   ├── status.html      # Store status dashboard
+│       │   ├── admin_codes.html # Admin invite code management page
+│       │   ├── admin_stats.html # Admin analytics dashboard (KPIs, charts, tables)
 │       │   └── partials/
 │       │       ├── _card.html       # Shared deal card markup (div-based, not <a>, to avoid nested anchor issue)
 │       │       ├── deal_cards.html  # htmx partial for deal grid (initial load)
 │       │       └── more_cards.html  # htmx partial for load-more pagination
 │       └── static/
-│           └── style.css        # Polished dark-theme CSS with sticky toolbar, compact view, review highlights, footer
+│           └── style.css        # Glassmorphism dark theme with gradient accents, glow effects, sticky toolbar
 ├── tests/
 │   ├── test_parse_price.py      # Shared price parser tests
 │   ├── test_categorizer.py      # Keyword categorization tests
@@ -85,7 +92,7 @@ pip install -e ".[dev]"
 # Install Playwright browsers
 playwright install chromium
 
-# Run tests (61 tests)
+# Run tests (64 tests)
 pytest tests/ -v
 
 # Scrape all stores and populate SQLite
@@ -128,35 +135,23 @@ ADMIN_KEY=mysecret uvicorn aggregator.web.app:create_app --factory --reload
 - **Browser scraping:** Store-specific JS extractors in `browser.py` are inlined into `STORE_CONFIGS` dict as `(wait_selector, js_extract, next_page_selector)` tuples. BigCommerce stores share one config via aliases. Use `forEach` over `for...of` for NodeList iteration. Use `domcontentloaded` (not `networkidle`) for anti-bot sites.
 - **Shared price parser:** All BS4 parsers import `parse_price()` from `parsers/common.py` — do not define per-parser copies.
 - **Route query helper:** `_fetch_deals()` in `routes.py` centralizes the query + count + review-matching logic shared by `index()` and `deals_fragment()`.
+- **TemplateResponse keyword style:** Always use `templates.TemplateResponse(request=request, name="template.html", context={...})` — newer Starlette rejects positional arguments (causes "unhashable type: dict" errors).
+- **Analytics tracking:** Client-side fire-and-forget `fetch()` calls to `POST /api/event` for clicks, page views, filter changes, and searches. Data attributes on deal cards (`data-store`, `data-deal-name`, `data-category`) support event metadata.
 
 ## Architecture Decisions
 
-- **SQLite for persistence:** Avoids re-scraping on every page load. Deals are snapshots refreshed via CLI.
-- **Keyword-based categorization:** Product titles and URLs are matched against keyword lists in `config.py`. Shopify collection handles provide strong category signals.
-- **Concurrent scraping with `asyncio.gather`:** Each store is scraped in parallel, with per-domain semaphores for rate limiting.
-- **Playwright for JS-rendered sites:** Evo, Backcountry, Steep & Cheap, Level Nine Sports, Corbetts, Alpine Shop VT, The Circle Whistler, The House, Peter Glenn, Sacred Ride all require headless browser with anti-bot stealth measures.
-- **htmx frontend:** Server-rendered HTML with htmx for dynamic filtering. No build tooling, no client-side framework.
-- **Reuse parent parsers:** Shopify and BlueZone parsers are imported from `snow_deals` rather than duplicated.
-- **Tax-free tagging:** Canadian stores and stores without WA sales tax nexus are marked `tax_free=True` for UI filtering. Currently: PRFO, The Circle Whistler, Corbetts, Sacred Ride (Canadian), Aspen Ski and Board (no WA nexus).
-- **Review score integration:** OGL provides 0-100 scores for ski/boot/gear. The Good Ride provides qualitative snowboard ratings (Great/Good/Average/Below Average/Bad) converted to 0-100 via weighted average. Reviews are cached in-memory per server start. Fuzzy matching uses brand-gating, model number overlap, and SequenceMatcher with 0.72 threshold. Multi-word brands (Lib Tech, Never Summer, etc.) are handled via `_KNOWN_MULTI_WORD_BRANDS`.
-- **Separate status dashboard:** Store health/freshness is shown on a dedicated `/status` page with summary stats, freshness legend, and per-store table.
-- **Size filtering:** Sizes stored as cleaned text (colors, retail prices, junk stripped by `_clean_sizes()`). Length filtering uses dedicated `length_min`/`length_max` integer columns extracted from cm values, enabling efficient SQL range overlap queries. Dual-range slider in UI.
-- **Data quality pipeline:** `EXCLUDE_KEYWORDS` in config.py filters non-snow items (gift cards, headlamps, insoles, etc.). `is_excluded()` in categorizer.py checks name + URL path. Brand-based fallback categorization with hardgoods guard (`NOT_HARDGOODS_KEYWORDS`). URL domain stripping prevents store domain from triggering false category matches.
-- **Offset-based pagination:** `/deals` endpoint uses `PAGE_SIZE=60` with load-more button pattern (htmx `outerHTML` swap). Fetches `PAGE_SIZE+1` to detect if more results exist.
-- **Kids product filtering:** Kids/junior products are filtered at the scraping layer (`_is_kids_product()` in `scraper.py`) rather than as a UI toggle.
-- **Invite-only auth:** Middleware in `auth.py` checks for session cookie or `ADMIN_KEY` env var. Unauthenticated users are redirected to `/invite`. One-time invite codes stored in SQLite, sessions tracked via secure cookies. Admin bypasses via `?admin_key=` query param (persisted as cookie).
-- **Deployment architecture:** Scraping and serving are decoupled. GitHub Actions runs the full scraper (with Playwright) every 6 hours and uploads `deals.db` as a GitHub Release asset. Render free tier downloads the DB on cold start via `start.sh` and serves the FastAPI app. `DATABASE_PATH` env var allows configurable DB location.
-- **Brand filtering:** Brands are extracted from product names via `SUBSTR(name, 1, INSTR(name||' ',' ')-1)` in SQL. Brand dropdown populated by `get_brands()` in `db.py`.
-- **CAD price display:** Stores with `currency="CAD"` in `StoreConfig` display prices as `C$` with a `CAD` tag on deal cards.
-- **Browser.py consolidation:** 8 per-store JS wrapper functions were eliminated by inlining JS into a `STORE_CONFIGS` dict. BigCommerce stores (Corbetts, Peter Glenn, Alpine Shop VT) share one config entry via aliases. Shared `_JS_PARSE_PRICE` constant is reused across extractors.
+- **SQLite + htmx:** SQLite via aiosqlite for persistence (no re-scraping per page load). Server-rendered HTML with htmx partials for dynamic filtering — no build step.
+- **Scraping:** `asyncio.gather` with per-domain semaphores. Playwright for 10 JS-rendered stores (anti-bot stealth). Shopify/BlueZone parsers reused from parent `snow_deals` package.
+- **Review matching:** OGL (26 categories, 0-100 scores) + TGR (7 sitemaps, qualitative→numeric). Two-pass fuzzy matching: exact (0.78 threshold) then family fallback (0.88). `_MODEL_TO_BRAND` dict for brandless product matching.
+- **Data quality:** Multi-layer pipeline — EXCLUDE_KEYWORDS → URL domain stripping → keyword categorization → boot disambiguation (`_disambiguate_boot()`) → brand/model name fallback → NOT_HARDGOODS_KEYWORDS guard. Uncategorized rate: 0.7%.
+- **Deployment:** GitHub Actions scrapes every 6h, uploads `deals.db` as release asset. Render downloads DB on cold start. Auth data (invite codes, events) persists in Turso cloud SQLite — survives redeploys. Sessions use stateless JWT cookies (no DB lookup). Admin panel + analytics dashboard.
+- **UI:** Glassmorphism dark theme, sticky toolbar, filter state in URL via `history.replaceState`. Deal cards use `<div>` with `onclick` (not `<a>`) to allow nested review links. CAD prices shown with `C$` prefix. Tax-free filter for WA-based users.
 
-- **Visual design:** Polished dark theme with sticky toolbar for search/filters, gradient logo, header stats, footer. CSS uses CSS custom properties throughout. Reviewed cards get subtle green top-border accent. Filter state synced to URL via `history.replaceState` for back-button persistence.
-
-### Known Data Quality Issues (as of 2026-03-22)
+### Known Data Quality Issues (as of 2026-03-23)
 
 - **Sacred Ride:** Returns 0 products — site may be down or markup changed. Needs investigation.
 - **The House:** Products have 0 images — JS extractor doesn't capture `image_url`.
-- **PRFO:** Only 65% categorized — broad catalog includes non-snow products.
-- **Sports Basement:** Only 43% categorized — same broad catalog issue.
+- **Uncategorized:** 104 deals (0.7%) remain uncategorized — mostly from Backcountry (18), Level Nine Sports (21), Skirack (25).
 - **Sizes:** Only available from Shopify stores (Aspen, Colorado Ski Shop, PRFO, Ski Depot, Sports Basement). Browser-scraped stores don't extract sizes.
 - **Evo:** Only 80 products — browser stores limited to `max_pages=3`, may need increase.
+- **Review match rates:** Skis 20.9%, snowboards 39.8%, ski boots 5.7%, bindings 13.8% — limited by OGL review volume for some categories.

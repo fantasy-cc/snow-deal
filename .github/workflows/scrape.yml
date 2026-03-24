@@ -12,7 +12,7 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +35,7 @@ jobs:
         run: snow-deals-agg -v refresh --max-pages 25
 
       - name: Fetch reviews
-        run: snow-deals-agg fetch-reviews || echo "fetch-reviews not available yet, skipping"
+        run: snow-deals-agg fetch-reviews --delay 1.0 --max-reviews 200 || echo "fetch-reviews failed, skipping"
 
       - name: Upload deals.db as release asset
         env:

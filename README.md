@@ -75,7 +75,7 @@ snow-deals/
 │       ├── base.py           # Abstract parser interface
 │       ├── bluezone.py       # BlueZone Sports (HTML)
 │       └── shopify.py        # Shopify stores (JSON API)
-├── aggregator/               # Deal aggregator sub-project
+├── aggregator/               # Awesome Snow Deals — multi-store aggregator with admin panel & analytics
 ├── pyproject.toml
 └── README.md
 ```

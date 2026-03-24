@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Awesome Snow Deals — Ski & Snowboard Deal Aggregator</title>
+    <title>FreshPowder — Ski & Snowboard Deal Aggregator</title>
     <meta name="description" content="Find the best ski and snowboard deals across {{ stores|length }} stores. Expert-reviewed gear at the lowest prices.">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=3">
+    <link rel="stylesheet" href="/static/style.css?v=2">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛷️</text></svg>">
 </head>
 <body>
@@ -25,7 +25,7 @@
                         </svg>
                     </div>
                     <div>
-                        <h1>Awesome Snow Deals</h1>
+                        <h1>FreshPowder</h1>
                         <p class="subtitle">Best ski & snowboard deals across {{ stores|length }} stores</p>
                     </div>
                 </div>
@@ -201,7 +201,7 @@
 
     <footer>
         <div class="footer-inner">
-            <span>Awesome Snow Deals</span>
+            <span>FreshPowder</span>
             <span class="footer-sep">&middot;</span>
             <span>{{ stores|length }} stores</span>
             <span class="footer-sep">&middot;</span>
@@ -283,52 +283,6 @@
             document.querySelector('#deal-grid').classList.add('compact-view');
         }
     });
-
-    /* ---- Analytics tracker ---- */
-    (function() {
-        function trackEvent(data) {
-            fetch('/api/event', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data),
-            }).catch(function() {});
-        }
-        trackEvent({event_type: 'page_view'});
-        function attachClickTrackers() {
-            document.querySelectorAll('.deal-card[data-store]').forEach(function(card) {
-                if (card._tracked) return;
-                card._tracked = true;
-                card.addEventListener('click', function() {
-                    trackEvent({
-                        event_type: 'click',
-                        deal_url: card.getAttribute('href') || card.dataset.href,
-                        deal_name: card.dataset.dealName,
-                        store: card.dataset.store,
-                        category: card.dataset.category || null,
-                    });
-                });
-            });
-        }
-        attachClickTrackers();
-        document.querySelectorAll('.filters select, .filters input').forEach(function(el) {
-            el.addEventListener('change', function() {
-                var val = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value;
-                trackEvent({event_type: 'filter', metadata: el.name + '=' + val});
-            });
-        });
-        var searchInput = document.querySelector('input[name="q"]');
-        if (searchInput) {
-            var searchTimer;
-            searchInput.addEventListener('input', function() {
-                clearTimeout(searchTimer);
-                var q = searchInput.value;
-                searchTimer = setTimeout(function() {
-                    if (q.length >= 2) trackEvent({event_type: 'search', metadata: q});
-                }, 1000);
-            });
-        }
-        document.body.addEventListener('htmx:afterSwap', function() { attachClickTrackers(); });
-    })();
     </script>
 </body>
 </html>

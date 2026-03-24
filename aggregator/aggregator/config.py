@@ -324,16 +324,25 @@ CATEGORY_RULES: list[tuple[str, list[str]]] = [
     ("accessories", ["ski bag", "snowboard bag", "board bag", "ski case",
                      "roller bag", "gear bag", "boot bag", "ski sleeve",
                      "ski sack", "board sack", "ski roller", "ski tote"]),
-    # Compound terms — prevent "ski boot" from matching "skis"
-    ("boots", ["ski boot", "ski boots", "snowboard boot", "snowboard boots",
-               "boot", "boots", " boa"]),
+    # Ski boots — specific keywords first
+    ("ski boots", ["ski boot", "ski boots", "cross country boot",
+                   "touring boot", "alpine boot",
+                   "mach sport"]),
+    # Snowboard boots — specific keywords
+    ("snowboard boots", ["snowboard boot", "snowboard boots"]),
+    # Generic boot — needs further disambiguation via brand/model fallback
+    ("boots", [" boa", "boot", "boots"]),
     ("bindings", ["ski binding", "ski bindings", "snowboard binding", "snowboard bindings",
-                  "binding", "bindings"]),
+                  "binding", "bindings", "step on"]),
     ("poles", ["ski pole", "ski poles", "pole", "poles"]),
     ("helmets", ["helmet", "helmets", " mips"]),
-    ("goggles", ["goggle", "goggles", " otg "]),
-    ("jackets", ["jacket", "jackets", "shell", "parka", "anorak", "insulated jacket"]),
-    ("pants", ["pant", "pants", "bibs", "bib"]),
+    ("goggles", ["goggle", "goggles", " otg ", "bonus lens", " mag ", "chromapop",
+                 "replacement lens", "flight deck", "flight path",
+                 "flight tracker", "line miner", "zonula"]),
+    ("jackets", ["jacket", "jackets", "shell", "parka", "anorak", "insulated jacket",
+                 "powder town jkt", "gore-tex suit", " jkt",
+                 "coat ", "coat", "raincoat", "puffer coat"]),
+    ("pants", ["pant", "pants", "bibs", "bib", "bottom "]),
     ("gloves", ["glove", "gloves", "mitten", "mittens", "mitt", "mitts"]),
     ("layers", ["baselayer", "base layer", "midlayer", "mid layer", "fleece",
                 "ninja suit", "pullover hood", "hoodie", "hoody", "long sleeve",
@@ -342,18 +351,37 @@ CATEGORY_RULES: list[tuple[str, list[str]]] = [
                 "base tek", "poly top", "poly bottom",
                 "zip up", "full zip", "1/2 zip", "1/2-zip",
                 "sweater", "vest ", "turtleneck", "pullover",
-                "r1 air", "r2 ", "nano puff"]),
+                "r1 air", "r2 ", "nano puff",
+                "gaiter top", "icecold", "rib top", "loose fit",
+                "mock crew", "crew neck", "tight ", "tights",
+                "legging",
+                "insulated shirt", "flannel shirt",
+                "sweatshirt", "crewneck",
+                "zip neck", "snap top", "pile snap",
+                "insulated flannel", "tech flannel",
+                "shacket",
+                "oasis ", "200 oasis", "260 tech", "260 vertex",
+                "260 quantum", "descender ", "rho ",
+                "adult chute", "pull on"]),
     ("accessories", ["neckwear", "neck gaiter", "balaclava", "beanie", "hat ", "sock", "socks",
                      "facemask", "face mask", "tube ", "hood ", "the hood",
                      "duffel", "trolley", "roller bag", "wheeled bag",
                      "backpack", "daypack", "pack ",
                      "footwarmer", "foot warmer", "lip balm",
+                     "headband", "clava", "pro clava", "gaiter",
+                     "ballcap", "cap ",
                      "stomp pad", "stomp", "traction", "crampon", "spike",
-                     "wax", "tuning", "scraper", "brush", "p-tex",
+                     "wax", "tuning", "scraper", "brush", "p-tex", "klister",
+                     "base binder", "base angle", "base tex", "cork",
+                     "red gummy", "structurite", "embro cream",
                      "shin guard", "insole", "outsole", "brake",
                      "beacon", "avalanche", "probe", "shovel",
                      "snowshoe", "snow shoe", "hand warmer", "toe warmer",
-                     "boot dryer", "ski lock", "ski strap", "goggle lens"]),
+                     "boot dryer", "ski lock", "ski strap", "goggle lens",
+                     "crab grab", "rescue package",
+                     "cord mask", "reflect mask", "striped mask",
+                     "ear warmer", "visor",
+                     "heli strap", "back protector"]),
     # Splitboard before snowboard (compound match)
     ("snowboards", ["splitboard", "splitboards", "snowboard", "snowboards"]),
     ("skis", ["ski", "skis"]),
@@ -375,6 +403,250 @@ SNOWBOARD_BRANDS: set[str] = {
     "burton", "capita", "gnu", "lib tech", "never summer",
     "nitro", "ride", "rome", "yes", "bataleon",
 }
+BOOT_BRANDS: set[str] = {
+    "tecnica", "lange", "scarpa", "dalbello", "full tilt",
+    "thirtytwo", "dc", "deeluxe",
+}
+# Brands that ONLY make ski boots — used to disambiguate generic "boot" matches
+SKI_BOOT_BRANDS: set[str] = {
+    "tecnica", "lange", "scarpa", "dalbello", "full tilt",
+    "dahu", "roxa", "alpina",
+}
+# Brands that ONLY make snowboard boots
+SNOWBOARD_BOOT_BRANDS: set[str] = {
+    "thirtytwo", "dc", "deeluxe", "nidecker",
+}
+# Well-known ski model names (without brand prefix) — used when brand extraction fails
+SKI_MODEL_NAMES: set[str] = {
+    # Atomic
+    "maverick", "bent", "redster",
+    # Head
+    "supershape", "shape", "kore",
+    # K2
+    "mindbender", "disruption", "reckoner",
+    # Nordica
+    "enforcer", "unleashed", "dobermann", "nela", "santa",
+    # Line
+    "pandora",
+    # Rossignol
+    "experience", "rallybird",
+    # Elan
+    "ripstick",
+    # Armada
+    "declivity", "arv", "arw",
+    # Blizzard
+    "rustler", "sheeva", "anomaly", "brahma",
+    # Fischer
+    "ranger", "curv",
+    # Volkl
+    "mantra", "deathwish", "wildcat", "peregrine", "m7",
+    # Salomon
+    "stance", "qst",
+    # Stockli
+    "stormrider", "montero",
+    # Faction
+    "prodigy", "dictator",
+    # DPS
+    "wailer",
+    # Women's-specific ski models
+    "secret", "vetta", "siren", "sierra", "maven", "reliance",
+    # Generic / multi-brand
+    "sender", "freecarver", "revolt",
+}
+SNOWBOARD_MODEL_NAMES: set[str] = {
+    # Burton
+    "twinpig", "kilroy", "process", "custom", "flagship", "feelgood",
+    "hometown", "dancehaul", "insano", "cartographer", "yeasayer",
+    "feelbetter", "swoon",
+    # Lib Tech
+    "proto", "orca", "ejack", "skunk",
+    # Ride
+    "warpig", "psychocandy", "shadowban", "berzerker", "algorythm",
+    "d.o.a.", "twinpig", "hera", "cadence",
+    "orton", "almanac", "excavator", "heartbreaker",
+    # Jones
+    "tweaker", "cultivator", "spellcaster", "frontier", "mountain",
+    "storm", "hovercraft", "stratos", "mind", "flagship",
+    "aeronaut", "horizon", "passport", "ultra",
+    # CAPiTA
+    "thunderstorm", "pathfinder", "mega", "satori",
+    # Salomon
+    "assassin", "huck", "abstract", "sleepwalker", "super",
+    # GNU
+    "headspace",
+    # Nitro
+    "alternator", "slash", "treeline",
+    # Yes
+    "greats", "typo", "jakk",
+    # Ride (more)
+    "distortia", "trance",
+    # Roxy
+    "xoxo",
+    # Various
+    "rumble", "mercury", "legacy", "dpr", "aura",
+    "falcor", "disaster", "meteorite", "strata",
+    "cadet", "relapse", "gloss",
+}
+GOGGLE_MODEL_NAMES: set[str] = {
+    "squad", "skyline", "i/o", "sagen", "goliath+",
+}
+BINDING_MODEL_NAMES: set[str] = {
+    "re:flex", "est", "cartel", "mission", "supermatic",
+    "griffon", "strive", "stage",
+    "citizen", "lexa", "scribe",
+}
+BOOT_MODEL_NAMES: set[str] = {
+    # Ski boot models
+    "cochise", "mach1", "hawx", "speedmachine", "s/pro",
+    "sportmachine", "promachine", "cabrio", "shadow", "nexo",
+    "alltrack", "bfc", "vizion", "xt3",
+    "formula", "steadfast", "garabaldi",
+    "veloce", "recon", "lupo", "kita",
+    "select",
+    # Snowboard boot models
+    "limelight", "highshot", "lasso", "maysis", "swath",
+}
+# Ski boot model names — for disambiguation
+SKI_BOOT_MODEL_NAMES: set[str] = {
+    "cochise", "mach1", "hawx", "speedmachine", "s/pro",
+    "sportmachine", "promachine", "cabrio", "shadow", "nexo",
+    "alltrack", "bfc", "vizion", "xt3",
+    "formula", "steadfast", "garabaldi",
+    "veloce", "recon", "lupo", "kita",
+    "select",
+}
+# Snowboard boot model names — for disambiguation
+SNOWBOARD_BOOT_MODEL_NAMES: set[str] = {
+    # Burton
+    "limelight", "highshot", "lasso", "maysis", "swath",
+    "photon", "ruler", "imperial", "felix",
+    "waverange",
+    # DC
+    "judge", "phase", "phantom", "control",
+    # ThirtyTwo
+    "lashed", "stw", "shifty",
+    # Salomon
+    "launch", "echo", "kiana", "dialogue",
+    # Ride
+    "jackson",
+    # K2
+    "boundary", "hanford", "overdraft",
+    # Various
+    "mint", "invado", "verdict", "hail", "exit",
+    "bodega", "profile", "skylab", "mosh", "salsa",
+}
+
+# Multi-word model names — checked via substring match on lowered name
+# Format: (phrase, category)
+MULTI_WORD_MODEL_NAMES: list[tuple[str, str]] = [
+    # Skis
+    ("black pearl", "skis"),
+    ("santa ana", "skis"),
+    ("wild belle", "skis"),
+    ("pick your line", "skis"),
+    ("il moro", "ski boots"),    # Full Tilt Il Moro boot
+    # Snowboards
+    ("huck knife", "snowboards"),
+    ("skate banana", "snowboards"),
+    ("evil twin", "snowboards"),
+    ("dark horse", "snowboards"),
+    ("rally cat", "snowboards"),
+    ("space metal", "snowboards"),
+    ("birds of a feather", "snowboards"),
+    ("ladies choice", "snowboards"),
+    ("magic stick", "snowboards"),
+    ("d.o.a.", "snowboards"),
+    ("super d.o.a.", "snowboards"),
+    ("mega merc", "snowboards"),
+    ("mega death", "snowboards"),
+    ("mind expander", "snowboards"),
+    ("storm chaser", "snowboards"),
+    ("storm wolf", "snowboards"),
+    ("fish 3d", "snowboards"),
+    ("cold brew", "snowboards"),
+    ("sky pilot", "snowboards"),
+    ("deep reach", "snowboards"),
+    ("easy rider", "snowboards"),
+    ("good company", "snowboards"),
+    ("family tree", "snowboards"),
+    ("t.rice", "snowboards"),
+    ("bryan iguchi", "snowboards"),
+    ("danny kass", "snowboards"),
+    ("jamie lynn", "snowboards"),
+    ("kazu kokubo", "snowboards"),
+    ("marcus kleveland", "snowboards"),
+    ("outerspace living", "snowboards"),
+    ("spring break", "snowboards"),
+    ("no drama", "snowboards"),
+    ("oh yeah", "snowboards"),
+    ("twin sister", "snowboards"),
+    # Boots
+    ("s/pro alpha", "boots"),
+    ("s/pro hv", "boots"),
+    ("cabrio lv", "boots"),
+    # Bindings
+    ("carbon supermatic", "bindings"),
+    ("lt supermatic", "bindings"),
+    ("lightning supermatic", "bindings"),
+    ("step-on", "bindings"),
+    ("re:flex", "bindings"),
+    # Goggles
+    ("low bridge", "goggles"),
+    ("bonus lens", "goggles"),
+    ("squad photochromic", "goggles"),
+    # More snowboard models
+    ("cream halldor", "snowboards"),
+    ("lil d", "snowboards"),
+    ("metal machine", "snowboards"),
+    ("source pro", "snowboards"),
+    ("source fc", "snowboards"),
+    # More ski boots
+    ("bcx tour", "ski boots"),
+    ("xc comfort", "ski boots"),
+    (" hv gw", "ski boots"),
+    (" mv gw", "ski boots"),
+    (" lv gw", "ski boots"),
+    # More snowboard boots
+    ("step on boot", "snowboard boots"),
+    ("dual boa", "snowboard boots"),
+    ("tm-2", "snowboard boots"),
+    # XC skis
+    ("x-ium skating", "skis"),
+    ("cross country", "skis"),
+    # Snow suits (jackets category)
+    ("snow suit", "jackets"),
+    ("insulated suit", "jackets"),
+    ("power suit", "jackets"),
+    ("freedom suit", "jackets"),
+    ("stretch freedom", "jackets"),
+    ("sassy beast", "jackets"),
+    ("shelter one piece", "jackets"),
+    ("shiloh snow", "jackets"),
+    # Snowboard (brand+model combos)
+    ("wasteland rocker", "snowboards"),
+    ("hps louidf", "snowboards"),
+    ("hps takaharu", "snowboards"),
+    # Ski + binding package
+    ("v-shape v2", "skis"),
+    # Accessories
+    ("windstopper face", "accessories"),
+    ("cold scarf", "accessories"),
+    ("neckwarmer", "accessories"),
+    ("face warmer", "accessories"),
+    ("base cleaner", "accessories"),
+    ("xc profile set", "accessories"),
+    ("clockwork rig", "goggles"),
+    ("reflect lens", "goggles"),
+    ("m5s lens", "goggles"),
+    # Bindings
+    ("look pivot", "bindings"),
+    ("gripwalk 20", "bindings"),
+    ("comp 20 ng", "bindings"),
+    # Layers
+    ("pile long zip", "layers"),
+    ("lana collar", "layers"),
+    ("ultraGear quarter", "layers"),
+]
 
 # Words that indicate a product is NOT hardgoods (skip brand-matching)
 NOT_HARDGOODS_KEYWORDS: list[str] = [
@@ -388,55 +660,91 @@ NOT_HARDGOODS_KEYWORDS: list[str] = [
 # Products matching these patterns are excluded entirely (non-snow-sport items)
 EXCLUDE_KEYWORDS: list[str] = [
     # Water sports
-    "wakeboard", "wakeskate", "wakesurf", "towable tube", "towable ",
-    "water ski", "waterski", "kayak", "paddleboard", "sup board",
-    "tube rope", "wake vest",
+    "wakeboard", "wakeskate", "wakesurf", "towable ", "water ski", "waterski",
+    "kayak", "paddleboard", "sup board", "tube rope", "wake vest",
+    "ronix", "connelly", "hyperlite", "o'brien", "liquid force",
+    "feelfree", "radar ", "ballast", "pfd", "life jacket",
+    "gladiator ", "ho sports", "drysuit", "wetsuit", "swim ",
+    "overton", "pwc anchor", "yakattack", "foil package", "slingshot hover",
     # Board sports (non-snow)
-    "longboard", "skateboard", "surfboard",
+    "longboard", "skateboard", "surfboard", "landyachtz", "hawgs wheels",
+    "globe ", "surf/skate", "cruiser complete",
     # Cycling
-    "bike rack", "bicycle", "cycling", "mountain bike", "bike shoe",
-    "mtb shoe", "mtb ", "gravel bike", " bike",
-    # Camping/hiking
-    "camping stove", "tent pole",
-    "running shoe", "trail shoe", "hiking shoe",
+    "bicycle", "cycling", " bike", "bike rack", "bike shoe", "bike carrier",
+    "mtb ", "gravel bike", "derailleur", "cassette ", "fork mount",
+    "stumpjumper", "bontrager ", "cannondale ", "trek fuel",
+    "7mesh ", "sugoi ", "pearl izumi ", "shimano ", "evoc ",
+    "aspero ", "turbo como", "saris ", "giro regime", "giro rincon",
+    "fox ranger", "e-bike",
+    # Running/hiking/outdoor shoes
+    "running shoe", "trail shoe", "hiking shoe", "approach shoe",
+    "trail runner", "road shoe", "mtn shoe", "mountain shoe",
+    "recovery shoe", "recovery flip", "ora recovery",
+    "cloudsurfer", "terrex ", "arahi ", "torin ", "anacapa ",
+    "peakfreak", "danner ", "keen arcata",
+    # Casual shoes / non-boot footwear
+    "sandal", "flip flop", "skate shoe", "tennis shoe",
+    "vans ", "emerica ", "etnies ", "new balance ", "numeric ",
+    "adidas ", "sorel ", " sneaker", "gazelle",
+    " mens shoe 20", " womens shoe 20", " ladies shoe 20",
     # Swimwear
-    "swimsuit", "swim trunk", "bikini", "swim jammer", "swim bottom",
-    "cheekini", "hipster",
-    # Casual clothing (non-snow)
-    "t-shirt", "tee ", "jersey", "shorts", "jammer",
-    " cap", "trucker hat", "trucker cap",
-    # Footwear (non-boot)
-    "sandal", "flip flop", "skate shoe", "skate shoes",
-    # Non-snow apparel
-    "polo ", "tank top",
-    # Non-snow equipment
-    "kneeboard", "slime wheel",
-    "zero gravity chair", "padded chair",
-    "climbing block",
-    # Summer/casual apparel
-    "romper", "linen ", "walkshort",
-    "rashguard", "rash guard",
-    # Drinkware/accessories
-    "tumbler", "quencher",
-    "recovery shoe", "recovery shoes",
-    # Other sports
-    "golf footbed", "soccer", "basketball", "football", "baseball", "tennis ball",
-    "fishing rod", "fishing reel",
-    # Water sports (specific brands/products)
-    "ronix", "connelly", "hyperlite", "o'brien",
-    "mainline", "wakeboard", "party cove",
-    # Cycling (specific)
-    "stumpjumper", "mountain bike", "bike shoe", "cycling shoe",
-    # Casual/non-snow
-    "keychain", "denim ", "jeans ", "collapsible seat",
-    "nomad seat", "power block", "glacier glasses",
-    "original denim", "print shirt",
-    "landyachtz", "hawgs wheels",
-    "bike carrier", "fork mount",
-    # Misc non-snow
-    "gift card", "digital gift card",
-    "headlamp", "insole", "insoles",
+    "swimsuit", "swim trunk", "bikini", "swim jammer", "cheekini",
+    # Casual clothing
+    "t-shirt", "tee ", "jersey", "shorts", "polo ", "tank top",
+    "romper", "jumpsuit", "coverall", "overall", "shortall",
+    "crop top", "bralette", "halter", "tunic", "kaftan", "skort",
+    "bodysuit", "body suit", "one-piece", "1-pce",
+    "jogger", "windbreaker", "overshirt", "denim ", "jeans ",
+    "button down", "buttondown", "woven shirt", "print shirt",
+    "sleeveless", "tech chino", "tech tank", "walkshort",
+    "linen ", "corduroy shirt",
+    # Casual brands (non-snow clothing in mixed-use stores)
+    "katin ", "brixton ", "cotopaxi ", "salty crew ", "billabong ",
+    "alp n rock ", "duer ", "free fly ", "jetty ", "kuhl ",
+    "purnell ", "indyeva ", "peppermint ", "maloja ",
+    "life is good ", "roark ", "rains ", "vessi ", "woodbird ",
+    "krimson klover", "super.natural ", "topo designs ", "herschel ",
+    # Sunglasses
+    "sunglasses", "sunglass",
+    # Hats (non-helmet)
+    " cap", "trucker hat", " snapback",
+    # Underwear
+    "bn3th ", "boxer brief", "boxer short", "everyday boxer",
+    # Bags / luggage
+    "tote bag", "lunch box", "sling bag", "gym bag", "belt bag",
+    "travel luggage", "rolling bag", "dry bag", "leg bag", "wash bag",
+    # Camping / outdoor gear
+    "camping stove", "tent pole", "camping tent", "person tent",
+    "sleeping bag", "camp chair", "quad chair", "cloud chair",
+    "coleman ", "kelty ", "stansport ", "mac sports",
+    "lantern", "flashlight", "headlamp", "binoculars",
+    "canopy", "folding cot", "privacy shelter",
+    # Home décor / gifts
+    "abbott ", "ornament", "advent calendar", "doormat", "gnome",
+    "christmas sign", "throw ",
+    # Electronics / misc
+    "earbuds", "usb-c cable", "gift card",
+    "insole", "insoles", "sticker pack", "decal",
     "free returns", "package protection",
-    "watersports flag", "shop wheels",
-    "sticker pack", "decal",
+    # Other sports
+    "soccer", "basketball", "football", "baseball", "tennis ball",
+    "fishing rod", "fishing reel", "kneeboard",
+    # Sunscreen
+    "sunscreen", "spf30", "spf50",
+    # Car racks
+    "thule ", "wheel carrier",
+    # Baby/infant
+    "baby supporter", "thule baby", "baby synchilla", "bunting suit", "infants'",
+    # Non-snow brand-specific products
+    "osprey ", "harricana ", "pj salvage",
+    "rab incline", "rab offgrid", "rab torque",
+    "poc re-cycle", "vpd air sleeve",
+    "specialized rime", "arcade belt",
+    # Summer clothing patterns
+    "rashguard", "rash guard", "sunshirt", "sun shirt",
+    "slide 202", "slipper 202",
+    # Misc non-snow
+    "tricycle", "race suit", "training mat",
+    "tumbler", "quencher", "keychain", "organizer",
+    "whippet attachment", "knob nut",
 ]

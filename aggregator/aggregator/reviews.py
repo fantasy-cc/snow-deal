@@ -48,10 +48,15 @@ OGL_CATEGORY_URLS = [
     # Additional categories
     "/topics/snow-sports/best-ski-gear",
     "/topics/snow-sports/best-ski-pants",
+    "/topics/snow-sports/best-ski-socks",
     "/topics/snow-sports/best-splitboard-bindings",
+    "/topics/snow-sports/best-splitboard-skins",
     "/topics/snow-sports/best-avalanche-beacon",
+    "/topics/snow-sports/best-avalanche-airbag",
     "/topics/snow-sports/best-climbing-skins",
     "/topics/snow-sports/best-snowshoes",
+    "/topics/snow-sports/best-snowshoes-womens",
+    "/topics/snow-sports/best-snowboard-womens",
 ]
 
 OGL_BASE = "https://www.outdoorgearlab.com"
@@ -220,11 +225,17 @@ TGR_BASE = "https://thegoodride.com"
 TGR_SITEMAPS = [
     f"{TGR_BASE}/snowboardreviews-sitemap.xml",
     f"{TGR_BASE}/snowboardreviews-sitemap2.xml",
+    f"{TGR_BASE}/bindingreviews-sitemap.xml",
+    f"{TGR_BASE}/bootreviews-sitemap.xml",
+    f"{TGR_BASE}/jacketreviews-sitemap.xml",
+    f"{TGR_BASE}/pantreviews-sitemap.xml",
+    f"{TGR_BASE}/accessoryreviews-sitemap.xml",
 ]
 
 # Qualitative rating → numeric score (0-100 scale)
 _TGR_RATING_MAP = {
     "exceptional": 95,
+    "excellent": 90,
     "great": 85,
     "good": 70,
     "average": 55,
@@ -233,10 +244,42 @@ _TGR_RATING_MAP = {
     "poor": 20,
 }
 
-# The 9 riding attributes TGR rates on each board
-_TGR_RIDING_ATTRS = {
+# TGR rating attributes by product type
+_TGR_BOARD_ATTRS = {
     "powder", "carving", "speed", "switch", "jumps",
     "jibbing", "pipe", "base glide", "uneven snow",
+}
+_TGR_BINDING_ATTRS = {
+    "flex", "boot support", "turn initiation", "buttering",
+    "binding adjustability", "stance adjustability", "comfort",
+    "ratchet system", "shock absorption",
+}
+_TGR_BOOT_ATTRS = {
+    "flex retention", "shock absorption", "traction",
+    "on & off ease", "warmth", "comfort", "heel hold",
+}
+_TGR_CLOTHING_ATTRS = {
+    "packability", "construction", "waterproofing", "breathability",
+}
+# Combined set for matching any TGR product type
+_TGR_ALL_ATTRS = _TGR_BOARD_ATTRS | _TGR_BINDING_ATTRS | _TGR_BOOT_ATTRS | _TGR_CLOTHING_ATTRS
+
+
+_TGR_REVIEW_PATHS = [
+    "/snowboard-reviews/",
+    "/snowboard-binding-reviews/",
+    "/snowboard-boot-reviews/",
+    "/snowboard-jacket-reviews/",
+    "/snowboard-pant-reviews/",
+    "/snowboard-accessory-reviews/",
+]
+_TGR_INDEX_PAGES = {
+    f"{TGR_BASE}/snowboard-reviews",
+    f"{TGR_BASE}/snowboard-binding-reviews",
+    f"{TGR_BASE}/snowboard-boot-reviews",
+    f"{TGR_BASE}/snowboard-jacket-reviews",
+    f"{TGR_BASE}/snowboard-pant-reviews",
+    f"{TGR_BASE}/snowboard-accessory-reviews",
 }
 
 
@@ -247,13 +290,14 @@ def _parse_tgr_sitemap(xml_text: str) -> list[str]:
         root = ET.fromstring(xml_text)
     except ET.ParseError:
         return urls
-    # Handle XML namespace
     ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     for url_el in root.findall(".//sm:url/sm:loc", ns):
-        if url_el.text and "/snowboard-reviews/" in url_el.text:
-            # Skip the index page itself
+        if not url_el.text:
+            continue
+        # Accept any TGR review path
+        if any(p in url_el.text for p in _TGR_REVIEW_PATHS):
             path = url_el.text.rstrip("/")
-            if path != f"{TGR_BASE}/snowboard-reviews":
+            if path not in _TGR_INDEX_PAGES:
                 urls.append(url_el.text)
     return urls
 
@@ -267,11 +311,28 @@ def _extract_tgr_brand(product_name: str) -> str:
     return product_name.split()[0] if product_name else ""
 
 
-def _extract_tgr_review(html: str, url: str) -> ReviewData | None:
-    """Extract snowboard review data from a TGR review page.
+def _detect_tgr_category(url: str) -> str:
+    """Detect product category from TGR review URL."""
+    url_lower = url.lower()
+    if "/snowboard-binding-reviews/" in url_lower:
+        return "bindings"
+    if "/snowboard-boot-reviews/" in url_lower:
+        return "boots"
+    if "/snowboard-jacket-reviews/" in url_lower:
+        return "jackets"
+    if "/snowboard-pant-reviews/" in url_lower:
+        return "pants"
+    if "/snowboard-accessory-reviews/" in url_lower:
+        return "accessories"
+    return "snowboard"
 
-    Parses qualitative ratings (Great/Good/Average/etc.) for riding
-    attributes and converts to a 0-100 score.
+
+def _extract_tgr_review(html: str, url: str) -> ReviewData | None:
+    """Extract review data from a TGR review page.
+
+    Parses qualitative ratings (Great/Good/Average/etc.) for riding/quality
+    attributes and converts to a 0-100 score. Works for snowboards, bindings,
+    boots, jackets, pants, and accessories.
     """
     soup = BeautifulSoup(html, "lxml")
 
@@ -280,24 +341,22 @@ def _extract_tgr_review(html: str, url: str) -> ReviewData | None:
     if not h1:
         return None
     raw_title = h1.get_text(strip=True)
-    # Clean title: remove "Snowboard Review", year ranges, "(with video)" etc.
+    # Clean title: remove "Review", "Buying Advice", year ranges, etc.
     product_name = re.sub(
-        r"\s*(Snowboard\s+Review|Review).*$", "", raw_title, flags=re.IGNORECASE,
+        r"\s*(Snowboard\s+Review|Review|And\s+Buying\s+Advice).*$", "",
+        raw_title, flags=re.IGNORECASE,
     ).strip()
-    # Remove trailing year ranges like "2010-2025"
     product_name = re.sub(r"\s+\d{4}[-–]\d{4}\s*$", "", product_name).strip()
 
-    # Extract brand — handle multi-word brands
     brand = _extract_tgr_brand(product_name)
+    category = _detect_tgr_category(url)
 
-    # Parse riding attribute ratings from page text
-    # TGR format: attribute name followed by rating word, e.g. "Carving Great"
+    # Method 1: Parse qualitative ratings from page text
     text = soup.get_text(" ", strip=True)
     scores: list[int] = []
-    for attr in _TGR_RIDING_ATTRS:
-        # Match "Attribute Rating" pattern (case-insensitive)
+    for attr in _TGR_ALL_ATTRS:
         pattern = re.compile(
-            rf"\b{re.escape(attr)}\s+(exceptional|great|good|average|below\s+average|bad|poor)\b",
+            rf"\b{re.escape(attr)}\s+(exceptional|excellent|great|good|average|below\s+average|bad|poor)\b",
             re.IGNORECASE,
         )
         match = pattern.search(text)
@@ -307,10 +366,18 @@ def _extract_tgr_review(html: str, url: str) -> ReviewData | None:
             if rating_text in _TGR_RATING_MAP:
                 scores.append(_TGR_RATING_MAP[rating_text])
 
+    # Method 2: Parse snowflake ratings from HTML tables
+    if not scores:
+        for img in soup.select("img.snowflake"):
+            src = (img.get("src") or "").lower()
+            if "snowflake_half" in src:
+                scores.append(50)  # 0.5/1.0 scaled to 0-100
+            elif "snowflake_empty" not in src and "snowflake" in src:
+                scores.append(100)  # 1.0/1.0 scaled to 0-100
+
     if not scores:
         return None
 
-    # Average all attribute scores
     score = round(sum(scores) / len(scores))
 
     return ReviewData(
@@ -319,7 +386,7 @@ def _extract_tgr_review(html: str, url: str) -> ReviewData | None:
         score=score,
         award=None,
         url=url,
-        category="snowboard",
+        category=category,
     )
 
 
@@ -388,12 +455,13 @@ async def scrape_tgr_reviews(
 
 # Words to strip from product names before matching
 _STRIP_WORDS = re.compile(
-    r"\b(20\d{2}|mens?|womens?|women'?s|men'?s|unisex|adult|jr|junior|youth|kids?|"
+    r"\b(20\d{2}|men'?s?|women'?s?|unisex|adult|jr|junior|youth|kids?|"
     r"ski|skis|snowboard|snowboards|boot|boots|binding|bindings|helmet|helmets|"
     r"goggle|goggles|glove|gloves|pant|pants|jacket|jackets|"
     r"system|w/|with)\b",
     re.IGNORECASE,
 )
+_STRIP_APOSTROPHE_S = re.compile(r"(?<=\s)'s\b")
 
 _STRIP_PARENS = re.compile(r"\([^)]*\)")
 _MULTI_SPACE = re.compile(r"\s+")
@@ -403,6 +471,7 @@ def _normalize(name: str) -> str:
     """Normalize a product name for fuzzy matching."""
     name = _STRIP_PARENS.sub(" ", name)
     name = _STRIP_WORDS.sub(" ", name)
+    name = _STRIP_APOSTROPHE_S.sub(" ", name)
     name = _MULTI_SPACE.sub(" ", name).strip().lower()
     return name
 
@@ -423,6 +492,8 @@ _BRAND_ALIASES: dict[str, str] = {
     "gnu snowboards": "gnu",
     "arbor collective": "arbor",
     "dwd": "dinosaurs will die",
+    "völkl": "volkl",
+    "voelkl": "volkl",
 }
 
 
@@ -439,14 +510,87 @@ def _normalize_brand(brand: str) -> str:
     return b
 
 
+# Map model names to brands — handles bare model-name products (e.g. "ARV 100" → Armada)
+_MODEL_TO_BRAND: dict[str, str] = {
+    # Armada
+    "arv": "armada", "arw": "armada", "declivity": "armada",
+    # Atomic
+    "bent": "atomic", "maverick": "atomic", "redster": "atomic", "hawx": "atomic",
+    # Blizzard
+    "rustler": "blizzard", "sheeva": "blizzard", "anomaly": "blizzard", "brahma": "blizzard",
+    # Burton
+    "custom": "burton", "process": "burton", "flagship": "burton", "feelgood": "burton",
+    "insano": "burton", "dancehaul": "burton", "twinpig": "burton", "yeasayer": "burton",
+    "feelbetter": "burton", "cartel": "burton", "mission": "burton", "step-on": "burton",
+    "limelight": "burton", "highshot": "burton", "lasso": "burton", "maysis": "burton",
+    "swath": "burton", "citizen": "burton", "lexa": "burton", "scribe": "burton",
+    # Dynastar
+    "menace": "dynastar",
+    # Elan
+    "ripstick": "elan",
+    # Faction
+    "prodigy": "faction", "dictator": "faction",
+    # Fischer
+    "ranger": "fischer", "curv": "fischer", "bfc": "fischer",
+    # Head
+    "kore": "head", "supershape": "head", "cabrio": "head", "shadow": "head",
+    "nexo": "head", "veloce": "head", "recon": "head",
+    # Jones
+    "frontier": "jones", "stratos": "jones", "hovercraft": "jones",
+    "mind": "jones", "storm": "jones", "ultra": "jones", "mountain": "jones",
+    # K2
+    "mindbender": "k2", "disruption": "k2", "reckoner": "k2",
+    # Lange
+    "vizion": "lange",
+    # Lib Tech
+    "orca": "lib tech", "ejack": "lib tech", "skunk": "lib tech",
+    # Line
+    "pandora": "line",
+    # Nordica
+    "enforcer": "nordica", "unleashed": "nordica", "dobermann": "nordica",
+    "nela": "nordica", "sportmachine": "nordica", "promachine": "nordica",
+    # Ride
+    "warpig": "ride", "psychocandy": "ride", "shadowban": "ride",
+    "d.o.a.": "ride", "algorythm": "ride", "berzerker": "ride",
+    # Rossignol
+    "experience": "rossignol", "rallybird": "rossignol", "alltrack": "rossignol",
+    # Salomon
+    "qst": "salomon", "stance": "salomon", "assassin": "salomon",
+    "huck": "salomon", "abstract": "salomon", "sleepwalker": "salomon",
+    "speedmachine": "salomon", "s/pro": "salomon",
+    # Tecnica
+    "cochise": "tecnica", "mach1": "tecnica",
+    # Volkl
+    "mantra": "volkl", "deathwish": "volkl", "wildcat": "volkl",
+    "peregrine": "volkl", "m7": "volkl",
+}
+
+
 def _extract_brand(name: str) -> str:
-    """Extract the brand name (heuristic, supports multi-word brands)."""
+    """Extract the brand name (heuristic, supports multi-word brands).
+
+    Skips leading year tokens (e.g. '2025 Atomic Bent' → 'atomic').
+    Falls back to model-to-brand lookup for bare model names (e.g. 'ARV 100' → 'armada').
+    """
     name_lower = name.strip().lower()
+    # Strip "Women's" / "Men's" prefix
+    for prefix in ("women's ", "men's ", "womens ", "mens "):
+        if name_lower.startswith(prefix):
+            name_lower = name_lower[len(prefix):]
+            break
+    # Skip leading year
+    parts = name_lower.split()
+    if parts and re.match(r"^20\d{2}$", parts[0]):
+        parts = parts[1:]
+        name_lower = " ".join(parts)
     for brand in _KNOWN_MULTI_WORD_BRANDS:
         if name_lower.startswith(brand):
             return _normalize_brand(brand)
-    parts = name.strip().split()
-    return _normalize_brand(parts[0]) if parts else ""
+    first = parts[0] if parts else ""
+    # Check model-to-brand lookup before falling back to first word
+    if first in _MODEL_TO_BRAND:
+        return _MODEL_TO_BRAND[first]
+    return _normalize_brand(first) if first else ""
 
 
 def _extract_model_key(name: str) -> str:
@@ -459,6 +603,16 @@ def _extract_model_key(name: str) -> str:
     tokens = [t for t in norm.split() if len(t) > 1 or t.isdigit()]
     # Return first few tokens which typically capture brand + model
     return " ".join(tokens[:4])
+
+
+def _extract_model_family(name: str) -> str:
+    """Extract brand + model name WITHOUT numbers for family-level matching.
+
+    E.g. 'Atomic Bent 90' and 'Atomic Bent 100' both -> 'atomic bent'
+    """
+    norm = _normalize(name)
+    tokens = [t for t in norm.split() if not t.isdigit() and len(t) > 1]
+    return " ".join(tokens[:3])
 
 
 _NUMBERS = re.compile(r"\d+")
@@ -480,20 +634,28 @@ def match_review_to_deal(
     deal_name: str,
     reviews: list[ReviewData],
     threshold: float = 0.78,
+    family_threshold: float = 0.88,
 ) -> ReviewData | None:
     """Find the best matching review for a deal name using fuzzy matching.
+
+    Uses a two-pass approach:
+    1. Exact model match (brand + model + numbers must align)
+    2. Family-level fallback (brand + model name, ignoring size/width numbers)
 
     Returns the best match above the threshold, or None.
     """
     deal_norm = _normalize(deal_name)
     deal_brand = _extract_brand(deal_name)
     deal_model = _extract_model_key(deal_name)
+    deal_family = _extract_model_family(deal_name)
     deal_numbers = _extract_key_numbers(deal_name)
     if not deal_norm or not deal_brand:
         return None
 
     best_score = 0.0
     best_review: ReviewData | None = None
+    best_family_score = 0.0
+    best_family_review: ReviewData | None = None
 
     for review in reviews:
         review_norm = _normalize(review.product_name)
@@ -505,23 +667,29 @@ def match_review_to_deal(
         if deal_brand != review_brand:
             continue
 
-        # If both have model numbers, at least one must overlap
         review_numbers = _extract_key_numbers(review.product_name)
-        if deal_numbers and review_numbers and not (deal_numbers & review_numbers):
-            continue
-
-        # Compare model keys (tighter match on core identity)
         review_model = _extract_model_key(review.product_name)
-        ratio = SequenceMatcher(None, deal_model, review_model).ratio()
+        review_family = _extract_model_family(review.product_name)
 
-        # Also check full name similarity as tiebreaker
-        full_ratio = SequenceMatcher(None, deal_norm, review_norm).ratio()
-        ratio = max(ratio, full_ratio)
+        # Pass 1: exact match (numbers must overlap if both present)
+        if not (deal_numbers and review_numbers and not (deal_numbers & review_numbers)):
+            ratio = SequenceMatcher(None, deal_model, review_model).ratio()
+            full_ratio = SequenceMatcher(None, deal_norm, review_norm).ratio()
+            ratio = max(ratio, full_ratio)
 
-        if ratio > best_score:
-            best_score = ratio
-            best_review = review
+            if ratio > best_score:
+                best_score = ratio
+                best_review = review
 
+        # Pass 2: family-level match (ignore numbers, match model name)
+        family_ratio = SequenceMatcher(None, deal_family, review_family).ratio()
+        if family_ratio > best_family_score:
+            best_family_score = family_ratio
+            best_family_review = review
+
+    # Prefer exact match, fall back to family-level match
     if best_score >= threshold and best_review is not None:
         return best_review
+    if best_family_score >= family_threshold and best_family_review is not None:
+        return best_family_review
     return None

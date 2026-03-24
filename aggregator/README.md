@@ -1,6 +1,6 @@
-# snow-deals aggregator
+# Awesome Snow Deals — Aggregator
 
-Multi-store deal aggregator for ski and snowboard gear. Scrapes 24 retailers, integrates review scores from OutdoorGearLab and The Good Ride, stores deal snapshots in SQLite, and serves a ranked dashboard via FastAPI + htmx. Deployed on Render with GitHub Actions cron for automated scraping. Part of the [snow-deals](../) monorepo.
+Multi-store deal aggregator for ski and snowboard gear. Scrapes 24 retailers, integrates 1,200+ review scores from OutdoorGearLab (skis, boots, gear) and The Good Ride (snowboards, bindings, boots, jackets), stores deal snapshots in SQLite, and serves a ranked dashboard via FastAPI + htmx. Two-pass fuzzy matching links reviews to deals with model family fallback. Includes admin panel for invite code management and analytics dashboard for tracking user behavior. Deployed on Render with GitHub Actions cron for automated scraping. Part of the [snow-deals](../) monorepo.
 
 **Live site:** [snow-deals.onrender.com](https://snow-deals.onrender.com) (invite-only)
 
@@ -41,8 +41,8 @@ snow-deals-agg refresh
 snow-deals-agg fetch-reviews
 
 # Fetch from a specific source
-snow-deals-agg fetch-reviews --source tgr   # The Good Ride (1000+ snowboard reviews)
-snow-deals-agg fetch-reviews --source ogl   # OutdoorGearLab (ski/boot/gear reviews)
+snow-deals-agg fetch-reviews --source tgr   # The Good Ride (1,800+ reviews: snowboards, bindings, boots, jackets)
+snow-deals-agg fetch-reviews --source ogl   # OutdoorGearLab (ski/boot/gear reviews, 26 categories)
 ```
 
 #### Query deals from the CLI
@@ -90,7 +90,9 @@ The web UI provides:
 - Load-more pagination (60 deals per page)
 - Filter state persisted in URL (survives back-navigation)
 - Store status dashboard at `/status` with data freshness indicators
-- Invite-only access with one-time codes
+- Invite-only access with reusable codes (max 5 uses each)
+- Admin panel at `/admin/codes` for generating and viewing invite codes
+- Analytics dashboard at `/admin/stats` — click tracking, popular filters, top deals
 
 ## Deployment
 
@@ -98,14 +100,18 @@ The site is deployed on **Render** (free tier) with scraping running on **GitHub
 
 - **Scraping:** GitHub Actions cron runs every 6 hours, uses Playwright for JS-rendered stores, uploads `deals.db` as a GitHub Release
 - **Serving:** Render downloads the latest `deals.db` on startup and serves the FastAPI app
-- **Auth:** Invite-only — generate codes via CLI, admin access via `ADMIN_KEY` env var
+- **Auth:** Invite codes stored in Turso cloud SQLite (persist across redeploys). Sessions use JWT signed cookies (stateless, no DB lookup). Admin access via `ADMIN_KEY` env var
+- **Admin:** `/admin/codes` for code management, `/admin/stats` for analytics dashboard
 
 ### Environment Variables (Render)
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_PATH` | Path to SQLite database (default: `./deals.db`) |
+| `DATABASE_PATH` | Path to deals SQLite database (default: `./deals.db`) |
 | `ADMIN_KEY` | Admin access key (visit `/?admin_key=VALUE` to authenticate) |
+| `TURSO_URL` | Turso database URL for auth persistence (e.g. `libsql://mydb.turso.io`) |
+| `TURSO_AUTH_TOKEN` | Turso auth token (from Turso dashboard) |
+| `SECRET_KEY` | JWT signing key for session cookies |
 | `GITHUB_TOKEN` | (Optional) For downloading `deals.db` from private repos |
 
 ## Development
@@ -113,7 +119,7 @@ The site is deployed on **Render** (free tier) with scraping running on **GitHub
 ```bash
 pip install -e ".[dev]"
 
-# Run tests (61 tests across 7 test files)
+# Run tests (64 tests across 7 test files)
 pytest tests/ -v
 
 # Lint
@@ -125,7 +131,7 @@ ruff check .
 | Test File | Tests | Covers |
 |-----------|-------|--------|
 | `test_parse_price.py` | 8 | Shared price parser (USD, CAD, commas, edge cases) |
-| `test_categorizer.py` | 12 | Keyword categorization (compound terms, URL fallback, exclusion, brand fallback) |
+| `test_categorizer.py` | 15 | Keyword categorization (compound terms, URL fallback, exclusion, brand fallback, boot disambiguation) |
 | `test_reviews.py` | 10 | Brand extraction, normalization, fuzzy matching |
 | `test_parsers.py` | 9 | AlpineShopVT, ColoradoDiscount, SacredRide HTML parsing |
 | `test_db.py` | 8 | SQLite CRUD, filters, upsert, brand query, store status |
@@ -137,20 +143,21 @@ ruff check .
 ```
 aggregator/
 ├── aggregator/
-│   ├── config.py          # Store registry (24 stores), category keywords, exclude keywords, brand sets
+│   ├── config.py          # Store registry (24 stores), category keywords, exclude keywords, brand/model name sets
 │   ├── models.py          # AggregatedDeal dataclass (sizes, length_min, length_max)
-│   ├── categorizer.py     # Keyword + brand-based categorization with exclusion filter
-│   ├── db.py              # SQLite schema, CRUD, store status, invite codes, sessions
-│   ├── auth.py            # Invite-only auth middleware + admin bypass
+│   ├── categorizer.py     # Keyword + brand-based categorization with boot disambiguation and exclusion filter
+│   ├── db.py              # SQLite schema (deals, reviews), CRUD, store status, migrations
+│   ├── auth_db.py         # Turso cloud SQLite for auth (invite codes, sessions, events)
+│   ├── auth.py            # JWT session auth middleware + admin bypass (stateless session validation)
 │   ├── scraper.py         # Multi-store async scraper with dynamic parser registry
-│   ├── reviews.py         # OGL + The Good Ride review scrapers, fuzzy product matcher
+│   ├── reviews.py         # OGL + TGR review scrapers (7 sitemaps), two-pass fuzzy matcher with family fallback
 │   ├── browser.py         # Playwright headless browser with per-store JS extractors
 │   ├── cli.py             # Click CLI (refresh, deals, fetch-reviews, generate-codes, list-codes)
 │   ├── parsers/
 │   │   ├── common.py      # Shared parse_price() used by all BS4 parsers
 │   │   ├── alpineshopvt.py, thecircle.py, coloradodiscount.py, sacredride.py
-│   └── web/               # FastAPI app with htmx templates + status dashboard
-├── tests/                 # 61 tests (parsers, DB, categorizer, reviews, browser, scraper)
+│   └── web/               # FastAPI app with htmx templates, admin panel, analytics dashboard
+├── tests/                 # 64 tests (parsers, DB, categorizer, reviews, browser, scraper)
 ├── pyproject.toml
 └── README.md
 ```

@@ -12,8 +12,23 @@ def test_snowboard():
 
 
 def test_ski_boots_not_skis():
-    """Compound term 'ski boot' should match 'boots', not 'skis'."""
-    assert categorize("Salomon S/Pro 130 Ski Boots") == "boots"
+    """Compound term 'ski boot' should match 'ski boots', not 'skis'."""
+    assert categorize("Salomon S/Pro 130 Ski Boots") == "ski boots"
+
+
+def test_snowboard_boots():
+    """Snowboard boot should match 'snowboard boots'."""
+    assert categorize("Burton Photon BOA Snowboard Boots") == "snowboard boots"
+
+
+def test_generic_boot_ski_brand():
+    """Generic 'boot' with ski brand should resolve to 'ski boots'."""
+    assert categorize("Lange LX 120 HV GW Ski Boots") == "ski boots"
+
+
+def test_generic_boot_snowboard_brand():
+    """Generic 'boot' with snowboard brand should resolve to 'snowboard boots'."""
+    assert categorize("ThirtyTwo Lashed Double BOA") == "snowboard boots"
 
 
 def test_bindings():
