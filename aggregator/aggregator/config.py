@@ -239,7 +239,6 @@ STORES: list[StoreConfig] = [
             "https://sacredride.ca/product-category/winter/goggles/",
         ],
         parser_type="sacredride",
-        use_browser=True,
         tax_free=True, currency="CAD",
     ),
 

@@ -32,21 +32,23 @@ templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    auth.ensure_auth_config()
     await init_db()
     await init_auth_db()
     # Auto-generate admin key for local development if not set
-    if not auth.ADMIN_KEY:
-        auth.ADMIN_KEY = secrets.token_urlsafe(16)
+    if not auth.get_admin_key():
+        admin_key = secrets.token_urlsafe(16)
+        os.environ["ADMIN_KEY"] = admin_key
         log.warning(
             "No ADMIN_KEY set — generated one for this session:\n"
             "  http://localhost:8000/?admin_key=%s",
-            auth.ADMIN_KEY,
+            admin_key,
         )
     yield
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Awesome Snow Deals", lifespan=lifespan)
+    app = FastAPI(title="FreshPowder", lifespan=lifespan)
     app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(invite_router)

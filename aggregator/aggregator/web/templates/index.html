@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FreshPowder — Ski & Snowboard Deal Aggregator</title>
     <meta name="description" content="Find the best ski and snowboard deals across {{ stores|length }} stores. Expert-reviewed gear at the lowest prices.">
+    <link rel="canonical" href="{{ request.url }}">
+    <meta property="og:site_name" content="FreshPowder">
+    <meta property="og:title" content="FreshPowder — Ski & Snowboard Deal Aggregator">
+    <meta property="og:description" content="Find the best ski and snowboard deals across {{ stores|length }} stores, with review scores and live filtering.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="FreshPowder — Ski & Snowboard Deal Aggregator">
+    <meta name="twitter:description" content="Find the best ski and snowboard deals across {{ stores|length }} stores.">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

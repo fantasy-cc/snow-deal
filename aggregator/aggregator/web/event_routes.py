@@ -9,13 +9,17 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from aggregator.auth import require_invite, SESSION_COOKIE
+from aggregator.auth import auth_redirect_path, require_invite, SESSION_COOKIE
 from aggregator.auth_db import log_event, get_click_stats
+from aggregator.web.rate_limit import SlidingWindowRateLimiter, client_key
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 event_router = APIRouter()
+EVENT_POST_LIMIT = 120
+EVENT_POST_WINDOW_SECONDS = 60
+event_post_limiter = SlidingWindowRateLimiter(window_seconds=EVENT_POST_WINDOW_SECONDS)
 
 
 class EventPayload(BaseModel):
@@ -33,6 +37,8 @@ async def track_event(request: Request, payload: EventPayload):
     allowed = {"click", "page_view", "filter", "search"}
     if payload.event_type not in allowed:
         return JSONResponse({"ok": False}, status_code=400)
+    if not event_post_limiter.allow(client_key(request, "event-post"), EVENT_POST_LIMIT):
+        return JSONResponse({"ok": False, "error": "rate_limited"}, status_code=429)
 
     session = request.cookies.get(SESSION_COOKIE) or request.cookies.get("admin_key")
     await log_event(
@@ -52,7 +58,7 @@ async def admin_stats_page(request: Request, days: int = 7):
     """Admin dashboard showing user analytics."""
     session = await require_invite(request)
     if session != "admin":
-        return RedirectResponse(url="/invite", status_code=302)
+        return RedirectResponse(url=auth_redirect_path(), status_code=302)
 
     stats = await get_click_stats(days=days)
     return templates.TemplateResponse(

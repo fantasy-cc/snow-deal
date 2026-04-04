@@ -32,20 +32,20 @@ class SacredRideParser(BaseParser):
 
     def get_next_page_url(self, html: str, current_url: str) -> str | None:
         soup = BeautifulSoup(html, "lxml")
-        next_link = soup.select_one("a.next.page-numbers")
+        next_link = soup.select_one("a.next.page-numbers, a[rel='next'], link[rel='next']")
         if next_link and next_link.get("href"):
             return urljoin(current_url, next_link["href"])
         return None
 
     def _parse_card(self, card: Tag, page_url: str) -> Product | None:
         # Product URL
-        link = card.select_one("a")
+        link = card.select_one("a.fusion-rollover-title-link, h4.fusion-rollover-title a, a[href*='/product/']")
         if not link or not link.get("href"):
             return None
         url = urljoin(page_url, link["href"])
 
         # Product name
-        name_el = card.select_one("h2")
+        name_el = card.select_one("h4.fusion-rollover-title, h4, h2")
         if not name_el:
             return None
         name = name_el.get_text(strip=True)
@@ -56,15 +56,15 @@ class SacredRideParser(BaseParser):
         current_price: float | None = None
         original_price: float | None = None
 
-        del_el = card.select_one("del .woocommerce-Price-amount")
-        ins_el = card.select_one("ins .woocommerce-Price-amount")
+        del_el = card.select_one("p.price del .woocommerce-Price-amount, del .woocommerce-Price-amount")
+        ins_el = card.select_one("p.price ins .woocommerce-Price-amount, ins .woocommerce-Price-amount")
 
         if del_el and ins_el:
             original_price = _parse_price(del_el.get_text(strip=True))
             current_price = _parse_price(ins_el.get_text(strip=True))
         else:
             # Not on sale — single price
-            price_el = card.select_one(".woocommerce-Price-amount")
+            price_el = card.select_one("p.price .woocommerce-Price-amount, .woocommerce-Price-amount")
             if price_el:
                 current_price = _parse_price(price_el.get_text(strip=True))
 

@@ -1,8 +1,8 @@
-# Awesome Snow Deals — Aggregator
+# FreshPowder — Aggregator
 
 Multi-store deal aggregator for ski and snowboard gear. Scrapes 24 retailers, integrates 1,200+ review scores from OutdoorGearLab (skis, boots, gear) and The Good Ride (snowboards, bindings, boots, jackets), stores deal snapshots in SQLite, and serves a ranked dashboard via FastAPI + htmx. Two-pass fuzzy matching links reviews to deals with model family fallback. Includes admin panel for invite code management and analytics dashboard for tracking user behavior. Deployed on Render with GitHub Actions cron for automated scraping. Part of the [snow-deals](../) monorepo.
 
-**Live site:** [snow-deals.onrender.com](https://snow-deals.onrender.com) (invite-only)
+**Live site:** [snow-deals.onrender.com](https://snow-deals.onrender.com)
 
 ## Getting Started
 
@@ -71,8 +71,8 @@ snow-deals-agg list-codes
 #### Web UI
 
 ```bash
-# Run locally with admin bypass
-ADMIN_KEY=mysecret uvicorn aggregator.web.app:create_app --factory --reload
+# Run locally with admin bypass in public mode
+PUBLIC_MODE=1 ADMIN_KEY=mysecret uvicorn aggregator.web.app:create_app --factory --reload
 # Open http://localhost:8000/?admin_key=mysecret
 ```
 
@@ -90,7 +90,7 @@ The web UI provides:
 - Load-more pagination (60 deals per page)
 - Filter state persisted in URL (survives back-navigation)
 - Store status dashboard at `/status` with data freshness indicators
-- Invite-only access with reusable codes (max 5 uses each)
+- Optional invite-only access via `PUBLIC_MODE` (reusable codes support max 5 uses each)
 - Admin panel at `/admin/codes` for generating and viewing invite codes
 - Analytics dashboard at `/admin/stats` — click tracking, popular filters, top deals
 
@@ -99,19 +99,31 @@ The web UI provides:
 The site is deployed on **Render** (free tier) with scraping running on **GitHub Actions**:
 
 - **Scraping:** GitHub Actions cron runs every 6 hours, uses Playwright for JS-rendered stores, uploads `deals.db` as a GitHub Release
-- **Serving:** Render downloads the latest `deals.db` on startup and serves the FastAPI app
+- **Serving:** Render downloads the latest `deals.db` on startup, warns when the DB is stale, and serves the FastAPI app
 - **Auth:** Invite codes stored in Turso cloud SQLite (persist across redeploys). Sessions use JWT signed cookies (stateless, no DB lookup). Admin access via `ADMIN_KEY` env var
 - **Admin:** `/admin/codes` for code management, `/admin/stats` for analytics dashboard
+
+### Render Auto-Redeploy
+
+The scrape workflow already supports redeploying Render after each successful data refresh.
+
+1. In Render, open the web service and create a **Deploy Hook**.
+2. Copy the hook URL into the GitHub Actions secret `RENDER_DEPLOY_HOOK_URL`.
+3. Keep `DATABASE_PATH` pointed at the mounted path used by the container (`/app/data/deals.db` by default).
+
+When that secret is present, `.github/workflows/scrape.yml` triggers Render after publishing the `latest-data` release asset.
 
 ### Environment Variables (Render)
 
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_PATH` | Path to deals SQLite database (default: `./deals.db`) |
+| `MAX_DB_STALENESS_HOURS` | Startup warning threshold for the downloaded `deals.db` freshness (default: `18`) |
+| `PUBLIC_MODE` | Set to `1` to disable invite gating and make the site public |
 | `ADMIN_KEY` | Admin access key (visit `/?admin_key=VALUE` to authenticate) |
 | `TURSO_URL` | Turso database URL for auth persistence (e.g. `libsql://mydb.turso.io`) |
 | `TURSO_AUTH_TOKEN` | Turso auth token (from Turso dashboard) |
-| `SECRET_KEY` | JWT signing key for session cookies |
+| `SECRET_KEY` | JWT signing key for session cookies; required whenever `PUBLIC_MODE` is not enabled |
 | `GITHUB_TOKEN` | (Optional) For downloading `deals.db` from private repos |
 
 ## Development
@@ -119,7 +131,7 @@ The site is deployed on **Render** (free tier) with scraping running on **GitHub
 ```bash
 pip install -e ".[dev]"
 
-# Run tests (64 tests across 7 test files)
+# Run tests (71 tests across 8 test files)
 pytest tests/ -v
 
 # Lint
@@ -137,6 +149,7 @@ ruff check .
 | `test_db.py` | 8 | SQLite CRUD, filters, upsert, brand query, store status |
 | `test_browser_config.py` | 5 | Store config registry, aliases, raw product parsing |
 | `test_scraper.py` | 2 | Kids filter, product-to-deal conversion, brand categorization |
+| `test_web_routes.py` | 5 | Public mode, auth redirects, robots.txt, rate limiting |
 
 ## Project Structure
 
@@ -157,7 +170,7 @@ aggregator/
 │   │   ├── common.py      # Shared parse_price() used by all BS4 parsers
 │   │   ├── alpineshopvt.py, thecircle.py, coloradodiscount.py, sacredride.py
 │   └── web/               # FastAPI app with htmx templates, admin panel, analytics dashboard
-├── tests/                 # 64 tests (parsers, DB, categorizer, reviews, browser, scraper)
+├── tests/                 # 71 tests (parsers, DB, categorizer, reviews, browser, scraper, web)
 ├── pyproject.toml
 └── README.md
 ```
@@ -182,7 +195,7 @@ aggregator/
 | Corbetts | Playwright (BigCommerce) | Yes (CA) | Active |
 | Level Nine Sports | Playwright (Chakra UI) | No | Active |
 | Peter Glenn | Playwright (BigCommerce) | No | Active |
-| Sacred Ride | Playwright (WooCommerce) | Yes (CA) | No Data (site issue) |
+| Sacred Ride | BS4 (Avada/WooCommerce) | Yes (CA) | Active |
 | Comor Sports | Shopify | Yes (CA) | Active |
 | Ski Pro AZ | Shopify | Yes | Active |
 | First Stop Board Barn | Shopify | Yes | Active |

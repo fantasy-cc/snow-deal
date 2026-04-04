@@ -8,6 +8,16 @@ services:
     envVars:
       - key: DATABASE_PATH
         value: /app/data/deals.db
+      - key: MAX_DB_STALENESS_HOURS
+        value: "18"
+      # Optional: disable invite gating for a public launch
+      # - key: PUBLIC_MODE
+      #   value: "1"
+      # Required unless PUBLIC_MODE=1
+      # - key: SECRET_KEY
+      #   sync: false
       # Set GITHUB_TOKEN in Render dashboard if repo is private
       # - key: GITHUB_TOKEN
       #   sync: false
+      # Configure the GitHub Actions secret RENDER_DEPLOY_HOOK_URL
+      # using this service's Render deploy hook to auto-redeploy after scrapes.

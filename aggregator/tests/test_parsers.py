@@ -107,3 +107,39 @@ class TestSacredRide:
         assert len(products) == 1
         assert products[0].current_price == 399.99
         assert products[0].original_price is None
+
+    def test_parse_current_live_markup(self):
+        html = """
+        <ul>
+        <li class="fusion-layout-column post-card product">
+            <div class="fusion-rollover">
+                <div class="fusion-rollover-content">
+                    <h4 class="fusion-rollover-title">
+                        <a class="fusion-rollover-title-link" href="https://sacredride.ca/product/moment-wildcat-tour-118-25-26/">
+                            Moment Wildcat Tour 118 25/26
+                        </a>
+                    </h4>
+                </div>
+            </div>
+            <div class="fusion-post-content post-content">
+                <p class="price has-sale">
+                    <del aria-hidden="true"><span class="woocommerce-Price-amount amount">$1,279.95</span></del>
+                    <ins aria-hidden="true"><span class="woocommerce-Price-amount amount">$1,099.95</span></ins>
+                </p>
+                <p class="fusion-onsale">$180.00 Off</p>
+            </div>
+        </li>
+        </ul>
+        """
+        products = self.parser.parse_listing_page(html, "https://sacredride.ca/product-category/winter/skis/")
+        assert len(products) == 1
+        p = products[0]
+        assert p.name == "Moment Wildcat Tour 118 25/26"
+        assert p.url == "https://sacredride.ca/product/moment-wildcat-tour-118-25-26/"
+        assert p.current_price == 1099.95
+        assert p.original_price == 1279.95
+
+    def test_next_page_from_rel_next_link(self):
+        html = '<link rel="next" href="https://sacredride.ca/product-category/winter/skis/page/2/" />'
+        url = self.parser.get_next_page_url(html, "https://sacredride.ca/product-category/winter/skis/")
+        assert url == "https://sacredride.ca/product-category/winter/skis/page/2/"

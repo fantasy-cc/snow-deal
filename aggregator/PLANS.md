@@ -42,9 +42,9 @@ Core platform built and refined over 14 phases: 24-store scraper (Shopify + Play
 - [x] (2026-03-23) End-to-end verification: invite flow, JWT persistence, admin panel, main page all working on production
 
 ### Phase 17: Remaining Work (Backlog)
-- [ ] Fix Sacred Ride — returns 0 products (site down or markup changed)
-- [ ] Fix The House — 0 images captured by JS extractor
-- [ ] Investigate Evo low product count (80 products, may need higher max_pages)
+- [x] (2026-04-04) Fix Sacred Ride — switched back to static HTML parser path after Avada markup change; live verification returned 157 discounted deals
+- [x] (2026-04-04) Re-verify The House scraper — Playwright extractor returns 236 products on the current sale listing; old `image_url` note is obsolete in the current data model
+- [x] (2026-04-04) Re-verify Evo pagination — live Playwright scrape returns 200 products in the first 5 pages; old `max_pages=3` note was stale
 - [ ] Set up Render deploy hook to auto-redeploy after scrape
 - [ ] Dark/light theme toggle
 - [ ] Price history tracking
@@ -100,7 +100,7 @@ Key lessons learned (see git history for full details):
 
 ## Outcomes & Retrospective
 
-Phases 1–16 complete. 24 stores configured, ~15,369 deals (after zero-discount cleanup and ~500 non-snow item exclusions). Review coverage: 1,271+ reviews from OGL (26 categories) and TGR (7 sitemaps). Match rates: skis 20.9%, snowboards 39.8%, ski boots 5.7%, bindings 13.8%. Boot category split into "ski boots" and "snowboard boots" with multi-layered disambiguation. Uncategorized rate reduced from 16.2% → 0.7% (104/15,369) via brand/model name fallback sets, MULTI_WORD_MODEL_NAMES, and expanded EXCLUDE_KEYWORDS (~150 keywords). `_MODEL_TO_BRAND` dict enables review matching for brandless products. Auth persistence solved: invite codes and events in Turso cloud SQLite (survive redeploys), sessions via JWT cookies (stateless). 64-test suite passing. Site live at https://snow-deals.onrender.com. Key remaining work: fix Sacred Ride and The House issues, Evo pagination.
+Phases 1–17 largely complete. 24 stores configured, ~15,369 deals (after zero-discount cleanup and ~500 non-snow item exclusions). Review coverage: 1,271+ reviews from OGL (26 categories) and TGR (7 sitemaps). Match rates: skis 20.9%, snowboards 39.8%, ski boots 5.7%, bindings 13.8%. Boot category split into "ski boots" and "snowboard boots" with multi-layered disambiguation. Uncategorized rate reduced from 16.2% → 0.7% (104/15,369) via brand/model name fallback sets, MULTI_WORD_MODEL_NAMES, and expanded EXCLUDE_KEYWORDS (~150 keywords). `_MODEL_TO_BRAND` dict enables review matching for brandless products. Auth persistence solved: invite codes and events in Turso cloud SQLite (survive redeploys), sessions via JWT cookies (stateless). Public launch work added: `PUBLIC_MODE`, safer `SECRET_KEY` handling, route tests, rate limiting, SEO metadata, and deploy-startup freshness checks. 71-test suite passing. Site live at https://snow-deals.onrender.com. Key remaining work: Render deploy-hook secret configuration, price history, and broader data-quality refinement.
 
 ## Context and Orientation
 
@@ -112,7 +112,7 @@ Phases 1-15 complete. Backlog items in Phase 16. Site live at https://snow-deals
 
 ## Validation and Acceptance
 
-- `pytest tests/ -v` — 64 tests, all passing
+- `pytest tests/ -v` — 71 tests, all passing
 - `snow-deals-agg refresh` — scrapes 24 stores into SQLite (~15,369 deals)
 - `snow-deals-agg fetch-reviews` — scrapes OGL + TGR reviews (1,271+)
 - Web UI at localhost:8000 — filtering, reviews, pagination, status dashboard all functional

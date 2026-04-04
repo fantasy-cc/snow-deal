@@ -53,7 +53,12 @@ jobs:
             --latest=false
 
       - name: Trigger Render deploy
-        if: env.RENDER_DEPLOY_HOOK_URL != ''
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: curl -s "$RENDER_DEPLOY_HOOK_URL"
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL not set; skipping Render redeploy."
+            exit 0
+          fi
+          echo "Triggering Render deploy hook..."
+          curl -fsS "$RENDER_DEPLOY_HOOK_URL"

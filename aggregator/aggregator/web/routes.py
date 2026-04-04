@@ -5,11 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 
 from datetime import datetime, timedelta
 
+from aggregator.auth import is_public_mode
 from aggregator.config import CATEGORY_RULES, STORES
 from aggregator.db import count_with_length, get_all_reviews, get_brands, query_deals, store_status
 from aggregator.reviews import ReviewData, match_review_to_deal
@@ -222,6 +223,20 @@ async def index(
             "next_offset": PAGE_SIZE,
         },
     )
+
+
+@router.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    """Serve search-engine crawl rules."""
+    if is_public_mode():
+        return PlainTextResponse(
+            "User-agent: *\n"
+            "Allow: /\n"
+            "Disallow: /admin\n"
+            "Disallow: /invite\n"
+            "Disallow: /api/\n"
+        )
+    return PlainTextResponse("User-agent: *\nDisallow: /\n")
 
 
 @router.get("/status", response_class=HTMLResponse)

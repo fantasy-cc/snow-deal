@@ -206,12 +206,14 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
         "li.product",
         f"""() => {{
             {_JS_PARSE_PRICE}
-            return Array.from(document.querySelectorAll('li.product')).map(card => {{
-                const linkEl = card.querySelector('a.fusion-column-anchor, a[href*="/product/"]');
-                const nameEl = card.querySelector('h4.fusion-title-heading, h4, h2');
-                const delEl = card.querySelector('del .woocommerce-Price-amount');
-                const insEl = card.querySelector('ins .woocommerce-Price-amount');
-                const singleEl = card.querySelector('.woocommerce-Price-amount');
+            return Array.from(document.querySelectorAll('li.post-card.product, li.product')).map(card => {{
+                const linkEl = card.querySelector(
+                    'a.fusion-rollover-title-link, h4.fusion-rollover-title a, a[href*="/product/"]'
+                );
+                const nameEl = card.querySelector('h4.fusion-rollover-title, h4.fusion-title-heading, h4, h2');
+                const delEl = card.querySelector('p.price del .woocommerce-Price-amount, del .woocommerce-Price-amount');
+                const insEl = card.querySelector('p.price ins .woocommerce-Price-amount, ins .woocommerce-Price-amount');
+                const singleEl = card.querySelector('p.price .woocommerce-Price-amount, .woocommerce-Price-amount');
                 return {{
                     name: nameEl ? nameEl.textContent.trim() : '',
                     url: linkEl ? linkEl.href : '',
@@ -220,7 +222,7 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
                 }};
             }});
         }}""",
-        "a.next.page-numbers",
+        "a.next.page-numbers, a[rel='next']",
     ),
 }
 

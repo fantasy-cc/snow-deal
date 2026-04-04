@@ -74,7 +74,8 @@ aggregator/
 │   ├── test_parsers.py          # BS4 parser tests (AlpineShopVT, ColoradoDiscount, SacredRide)
 │   ├── test_db.py               # SQLite CRUD, filters, upsert, brand query tests
 │   ├── test_browser_config.py   # Store config registry + raw product parsing tests
-│   └── test_scraper.py          # Kids filter + product-to-deal conversion tests
+│   ├── test_scraper.py          # Kids filter + product-to-deal conversion tests
+│   └── test_web_routes.py       # Web auth/public-mode/rate-limit route tests
 ```
 
 ## Development Workflow
@@ -92,7 +93,7 @@ pip install -e ".[dev]"
 # Install Playwright browsers
 playwright install chromium
 
-# Run tests (64 tests)
+# Run tests (71 tests)
 pytest tests/ -v
 
 # Scrape all stores and populate SQLite
@@ -141,17 +142,14 @@ ADMIN_KEY=mysecret uvicorn aggregator.web.app:create_app --factory --reload
 ## Architecture Decisions
 
 - **SQLite + htmx:** SQLite via aiosqlite for persistence (no re-scraping per page load). Server-rendered HTML with htmx partials for dynamic filtering — no build step.
-- **Scraping:** `asyncio.gather` with per-domain semaphores. Playwright for 10 JS-rendered stores (anti-bot stealth). Shopify/BlueZone parsers reused from parent `snow_deals` package.
+- **Scraping:** `asyncio.gather` with per-domain semaphores. Playwright for JS-rendered stores (anti-bot stealth). Shopify/BlueZone parsers reused from parent `snow_deals` package, and Sacred Ride now uses the BS4 parser path again because the live site is static HTML.
 - **Review matching:** OGL (26 categories, 0-100 scores) + TGR (7 sitemaps, qualitative→numeric). Two-pass fuzzy matching: exact (0.78 threshold) then family fallback (0.88). `_MODEL_TO_BRAND` dict for brandless product matching.
 - **Data quality:** Multi-layer pipeline — EXCLUDE_KEYWORDS → URL domain stripping → keyword categorization → boot disambiguation (`_disambiguate_boot()`) → brand/model name fallback → NOT_HARDGOODS_KEYWORDS guard. Uncategorized rate: 0.7%.
 - **Deployment:** GitHub Actions scrapes every 6h, uploads `deals.db` as release asset. Render downloads DB on cold start. Auth data (invite codes, events) persists in Turso cloud SQLite — survives redeploys. Sessions use stateless JWT cookies (no DB lookup). Admin panel + analytics dashboard.
 - **UI:** Glassmorphism dark theme, sticky toolbar, filter state in URL via `history.replaceState`. Deal cards use `<div>` with `onclick` (not `<a>`) to allow nested review links. CAD prices shown with `C$` prefix. Tax-free filter for WA-based users.
 
-### Known Data Quality Issues (as of 2026-03-23)
+### Known Data Quality Issues (as of 2026-04-04)
 
-- **Sacred Ride:** Returns 0 products — site may be down or markup changed. Needs investigation.
-- **The House:** Products have 0 images — JS extractor doesn't capture `image_url`.
 - **Uncategorized:** 104 deals (0.7%) remain uncategorized — mostly from Backcountry (18), Level Nine Sports (21), Skirack (25).
 - **Sizes:** Only available from Shopify stores (Aspen, Colorado Ski Shop, PRFO, Ski Depot, Sports Basement). Browser-scraped stores don't extract sizes.
-- **Evo:** Only 80 products — browser stores limited to `max_pages=3`, may need increase.
 - **Review match rates:** Skis 20.9%, snowboards 39.8%, ski boots 5.7%, bindings 13.8% — limited by OGL review volume for some categories.
