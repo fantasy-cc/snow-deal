@@ -41,13 +41,36 @@ Core platform built and refined over 14 phases: 24-store scraper (Shopify + Play
 - [x] (2026-03-23) Pre-seed invite codes (SNOW2024, FRESHPOW) in Turso
 - [x] (2026-03-23) End-to-end verification: invite flow, JWT persistence, admin panel, main page all working on production
 
-### Phase 17: Remaining Work (Backlog)
+### Phase 17: Scraper Health (Complete)
 - [x] (2026-04-04) Fix Sacred Ride — switched back to static HTML parser path after Avada markup change; live verification returned 157 discounted deals
-- [x] (2026-04-04) Re-verify The House scraper — Playwright extractor returns 236 products on the current sale listing; old `image_url` note is obsolete in the current data model
-- [x] (2026-04-04) Re-verify Evo pagination — live Playwright scrape returns 200 products in the first 5 pages; old `max_pages=3` note was stale
+- [x] (2026-04-04) Re-verify The House scraper — Playwright extractor returns 236 products on the current sale listing
+- [x] (2026-04-04) Re-verify Evo pagination — live Playwright scrape returns 200 products in the first 5 pages
+
+### Phase 18: UX, Data Quality & Filtering (Complete — 2026-04-05)
+- [x] Add `image_url TEXT` column to deals schema (migration + upsert + query)
+- [x] Extract image URLs in Shopify parser (`images[0].src`) and all 7 browser JS extractors
+- [x] Add `brand TEXT` column populated at scrape time using `_extract_brand()` from reviews.py
+- [x] Fix `get_brands()` to use the `brand` column (was naive SUBSTR first-word SQL)
+- [x] Fix `query_deals()` brand filter to use `brand = ?` (was fragile `name LIKE '{brand} %'`)
+- [x] Add `deal_reviews` join table (deal_id, review_id, score, award, review_url)
+- [x] Add `compute_and_store_deal_reviews()` in reviews.py — runs fuzzy matching once, stores results
+- [x] Call `compute_and_store_deal_reviews()` from `fetch-reviews` CLI command
+- [x] Update `query_deals()` to LEFT JOIN `deal_reviews` — `top_reviewed` sort and `reviewed_only` filter now SQL, not Python
+- [x] Remove `_reviews_cache`, `_get_reviews()`, `_attach_reviews()` from routes.py (O(N×M) eliminated)
+- [x] Add `review_score`, `review_award`, `review_url` fields to `AggregatedDeal` (pre-joined from DB)
+- [x] Update `_card.html` to display `deal.image_url` with placeholder fallback
+- [x] Add compact view image thumbnail (64×80px) in style.css
+- [x] Add deal counts to category/store dropdowns in index.html (`get_category_counts()`)
+- [x] Fix length filter: active range now EXCLUDES NULL-length deals (was including them)
+- [x] Improve empty state in deal_cards.html (icon + clearer text)
+- [x] 71 tests passing after test fixture updates for new schema
+
+### Phase 19: Backlog
 - [ ] Set up Render deploy hook to auto-redeploy after scrape
 - [ ] Dark/light theme toggle
 - [ ] Price history tracking
+- [ ] Gender filter (extract Women's/Men's from product name)
+- [ ] Improve review match rates for ski boots (5.7%) and bindings (13.8%)
 
 ## Surprises & Discoveries
 
@@ -98,9 +121,15 @@ Key lessons learned (see git history for full details):
 - **Boot category split** — "boots" → "ski boots"/"snowboard boots" via multi-layered `_disambiguate_boot()`
 - **Model-to-brand lookup** — `_MODEL_TO_BRAND` (60+ entries) enables review matching for brandless products
 
+### UX, Data Quality & Filtering (2026-04-05)
+- **deal_reviews join table** — pre-compute review→deal matches at `fetch-reviews` time; eliminates O(N×M) runtime matching in routes.py; `top_reviewed` sort and `reviewed_only` filter become SQL operations
+- **brand column** — extracted at scrape time using `_extract_brand()` (already in reviews.py); fixes multi-word brands ("Lib Tech"), year prefixes ("2025 Atomic"), gender prefixes ("Women's Salomon") in filter dropdown
+- **image_url column** — added to all parsers and browser JS extractors; Shopify uses `images[0].src`, browser stores use `data-src || src` pattern
+- **Length filter NULL exclusion** — active length range now excludes NULL-length deals (previous behavior silently included all 8,712 null-length deals)
+
 ## Outcomes & Retrospective
 
-Phases 1–17 largely complete. 24 stores configured, ~15,369 deals (after zero-discount cleanup and ~500 non-snow item exclusions). Review coverage: 1,271+ reviews from OGL (26 categories) and TGR (7 sitemaps). Match rates: skis 20.9%, snowboards 39.8%, ski boots 5.7%, bindings 13.8%. Boot category split into "ski boots" and "snowboard boots" with multi-layered disambiguation. Uncategorized rate reduced from 16.2% → 0.7% (104/15,369) via brand/model name fallback sets, MULTI_WORD_MODEL_NAMES, and expanded EXCLUDE_KEYWORDS (~150 keywords). `_MODEL_TO_BRAND` dict enables review matching for brandless products. Auth persistence solved: invite codes and events in Turso cloud SQLite (survive redeploys), sessions via JWT cookies (stateless). Public launch work added: `PUBLIC_MODE`, safer `SECRET_KEY` handling, route tests, rate limiting, SEO metadata, and deploy-startup freshness checks. 71-test suite passing. Site live at https://snow-deals.onrender.com. Key remaining work: Render deploy-hook secret configuration, price history, and broader data-quality refinement.
+Phases 1–18 complete. 24 stores configured, ~15,369 deals. Review coverage: 1,271+ reviews from OGL + TGR. Deal cards now show product images, correct multi-word brand names, and pre-computed review scores (O(1) lookup via `deal_reviews` join table — no more O(N×M) runtime fuzzy matching). Category/store dropdowns show live deal counts. Length filter correctly excludes non-length deals when active. Brand column extracted at scrape time using `_extract_brand()` — handles "Lib Tech", "2025 Atomic Bent", "Women's Salomon". 71 tests passing. Site live at https://snow-deals.onrender.com. Key remaining work: run a fresh `refresh` + `fetch-reviews` to populate new columns, Render deploy-hook configuration, price history, and dark/light theme toggle.
 
 ## Context and Orientation
 
@@ -113,6 +142,6 @@ Phases 1-15 complete. Backlog items in Phase 16. Site live at https://snow-deals
 ## Validation and Acceptance
 
 - `pytest tests/ -v` — 71 tests, all passing
-- `snow-deals-agg refresh` — scrapes 24 stores into SQLite (~15,369 deals)
-- `snow-deals-agg fetch-reviews` — scrapes OGL + TGR reviews (1,271+)
-- Web UI at localhost:8000 — filtering, reviews, pagination, status dashboard all functional
+- `snow-deals-agg refresh` — scrapes 24 stores; verify `image_url` and `brand` populated
+- `snow-deals-agg fetch-reviews` — scrapes reviews; verify `deal_reviews` table populated
+- Web UI at localhost:8000 — images on cards, brand filter works for "Lib Tech", top-reviewed sort fast, category counts visible in dropdowns, length filter excludes null-length deals
