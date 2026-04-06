@@ -22,3 +22,8 @@ class AggregatedDeal:
     length_min: int | None  # Shortest length in cm (extracted from sizes)
     length_max: int | None  # Longest length in cm (extracted from sizes)
     scraped_at: datetime
+    image_url: str | None = None
+    brand: str | None = None
+    review_score: int | None = None
+    review_award: str | None = None
+    review_url: str | None = None

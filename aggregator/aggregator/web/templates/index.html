@@ -87,9 +87,12 @@
                                 hx-include=".filters [name],[name='q']">
                             <option value="">All categories</option>
                             {% for cat in categories %}
+                            {% set cnt = category_counts.get(cat, 0) if category_counts is defined else 0 %}
+                            {% if cnt > 0 or cat == current_category %}
                             <option value="{{ cat }}" {% if cat == current_category %}selected{% endif %}>
-                                {{ cat|title }}
+                                {{ cat|title }}{% if cnt %} ({{ cnt }}){% endif %}
                             </option>
+                            {% endif %}
                             {% endfor %}
                         </select>
                     </div>
@@ -117,9 +120,12 @@
                                 hx-include=".filters [name],[name='q']">
                             <option value="">All stores</option>
                             {% for s in stores %}
+                            {% set cnt = store_counts.get(s, 0) if store_counts is defined else 0 %}
+                            {% if cnt > 0 or s == current_store %}
                             <option value="{{ s }}" {% if s == current_store %}selected{% endif %}>
-                                {{ s }}
+                                {{ s }}{% if cnt %} ({{ cnt }}){% endif %}
                             </option>
+                            {% endif %}
                             {% endfor %}
                         </select>
                     </div>

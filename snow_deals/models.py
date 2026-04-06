@@ -11,6 +11,7 @@ class Product:
     original_price: float | None = None
     sizes: list[str] | None = None
     product_type: str | None = None
+    image_url: str | None = None
 
     @property
     def discount_pct(self) -> float:

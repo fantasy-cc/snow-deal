@@ -42,6 +42,17 @@ CREATE TABLE IF NOT EXISTS reviews (
     scraped_at    TEXT    NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS deal_reviews (
+    deal_id     INTEGER NOT NULL,
+    review_id   INTEGER NOT NULL,
+    score       INTEGER NOT NULL,
+    award       TEXT,
+    review_url  TEXT    NOT NULL,
+    PRIMARY KEY (deal_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_deal_reviews_score ON deal_reviews (score DESC);
+
 """
 
 
@@ -49,18 +60,21 @@ MIGRATIONS = [
     "ALTER TABLE deals ADD COLUMN sizes TEXT",
     "ALTER TABLE deals ADD COLUMN length_min INTEGER",
     "ALTER TABLE deals ADD COLUMN length_max INTEGER",
+    "ALTER TABLE deals ADD COLUMN image_url TEXT",
+    "ALTER TABLE deals ADD COLUMN brand TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_brand ON deals (brand)",
 ]
 
 
 async def init_db(db_path: Path = DB_PATH) -> None:
-    """Create the deals table if it doesn't exist."""
+    """Create tables and apply migrations."""
     async with aiosqlite.connect(db_path) as db:
         await db.executescript(SCHEMA)
         for migration in MIGRATIONS:
             try:
                 await db.execute(migration)
             except Exception:
-                pass  # column already exists
+                pass  # column/index already exists
         await db.commit()
 
 
@@ -72,8 +86,9 @@ async def upsert_deals(deals: list[AggregatedDeal], db_path: Path = DB_PATH) -> 
             await db.execute(
                 """\
                 INSERT INTO deals (store, name, url, current_price, original_price,
-                                   discount_pct, category, sizes, length_min, length_max, scraped_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   discount_pct, category, sizes, length_min, length_max,
+                                   scraped_at, image_url, brand)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(url) DO UPDATE SET
                     current_price  = excluded.current_price,
                     original_price = excluded.original_price,
@@ -82,17 +97,50 @@ async def upsert_deals(deals: list[AggregatedDeal], db_path: Path = DB_PATH) -> 
                     sizes          = excluded.sizes,
                     length_min     = excluded.length_min,
                     length_max     = excluded.length_max,
-                    scraped_at     = excluded.scraped_at
+                    scraped_at     = excluded.scraped_at,
+                    image_url      = excluded.image_url,
+                    brand          = excluded.brand
                 """,
                 (
                     d.store, d.name, d.url, d.current_price, d.original_price,
                     d.discount_pct, d.category, d.sizes, d.length_min, d.length_max,
-                    d.scraped_at.isoformat(),
+                    d.scraped_at.isoformat(), d.image_url, d.brand,
                 ),
             )
             count += 1
         await db.commit()
     return count
+
+
+async def upsert_deal_reviews(
+    rows: list[dict],
+    db_path: Path = DB_PATH,
+) -> int:
+    """Insert or replace deal→review matches. Each row: deal_id, review_id, score, award, review_url."""
+    async with aiosqlite.connect(db_path) as db:
+        count = 0
+        for r in rows:
+            await db.execute(
+                """\
+                INSERT OR REPLACE INTO deal_reviews (deal_id, review_id, score, award, review_url)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (r["deal_id"], r["review_id"], r["score"], r.get("award"), r["review_url"]),
+            )
+            count += 1
+        await db.commit()
+    return count
+
+
+async def get_deal_reviews_map(db_path: Path = DB_PATH) -> dict[int, dict]:
+    """Return {deal_id: {score, award, review_url}} for all matched deals."""
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT deal_id, score, award, review_url FROM deal_reviews"
+        )
+        rows = await cursor.fetchall()
+    return {row["deal_id"]: dict(row) for row in rows}
 
 
 async def count_with_length(db_path: Path = DB_PATH) -> int:
@@ -106,14 +154,23 @@ async def count_with_length(db_path: Path = DB_PATH) -> int:
 
 
 async def get_brands(db_path: Path = DB_PATH) -> list[str]:
-    """Return distinct brand names (first word of product name), sorted."""
+    """Return distinct brand names from the brand column, sorted."""
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
-            "SELECT DISTINCT SUBSTR(name, 1, INSTR(name || ' ', ' ') - 1) AS brand "
-            "FROM deals WHERE brand != '' ORDER BY brand"
+            "SELECT DISTINCT brand FROM deals WHERE brand IS NOT NULL AND brand != '' ORDER BY brand"
         )
         rows = await cursor.fetchall()
     return [row[0] for row in rows if row[0]]
+
+
+async def get_category_counts(db_path: Path = DB_PATH) -> dict[str, int]:
+    """Return {category: deal_count} for all non-null categories."""
+    async with aiosqlite.connect(db_path) as db:
+        cursor = await db.execute(
+            "SELECT category, COUNT(*) FROM deals WHERE category IS NOT NULL GROUP BY category"
+        )
+        rows = await cursor.fetchall()
+    return {row[0]: row[1] for row in rows}
 
 
 async def query_deals(
@@ -130,64 +187,80 @@ async def query_deals(
     q: str = "",
     size_min: int | None = None,
     size_max: int | None = None,
+    reviewed_only: bool = False,
     count_only: bool = False,
     db_path: Path = DB_PATH,
 ) -> list[AggregatedDeal] | int:
     """Query deals with optional filters. If count_only=True, returns int."""
-    clauses: list[str] = ["discount_pct >= ?"]
+    clauses: list[str] = ["deals.discount_pct >= ?"]
     params: list[object] = [min_discount]
 
     if category:
-        clauses.append("category = ?")
+        clauses.append("deals.category = ?")
         params.append(category)
     if store:
-        clauses.append("store = ?")
+        clauses.append("deals.store = ?")
         params.append(store)
     if brand:
-        clauses.append("name LIKE ?")
-        params.append(f"{brand} %")
+        clauses.append("deals.brand = ?")
+        params.append(brand)
     if tax_free_only and tax_free_stores:
         placeholders = ", ".join("?" for _ in tax_free_stores)
-        clauses.append(f"store IN ({placeholders})")
+        clauses.append(f"deals.store IN ({placeholders})")
         params.extend(tax_free_stores)
     if q:
-        clauses.append("name LIKE ?")
+        clauses.append("deals.name LIKE ?")
         params.append(f"%{q}%")
     if size_min is not None or size_max is not None:
-        length_conds = ["length_min IS NULL"]
+        # Exclude NULL-length deals when a length filter is active
+        length_conds = []
         if size_min is not None and size_max is not None:
-            length_conds.append("(length_max >= ? AND length_min <= ?)")
+            length_conds.append("(deals.length_max >= ? AND deals.length_min <= ?)")
             params.extend([size_min, size_max])
         elif size_min is not None:
-            length_conds.append("length_max >= ?")
+            length_conds.append("deals.length_max >= ?")
             params.append(size_min)
         elif size_max is not None:
-            length_conds.append("length_min <= ?")
+            length_conds.append("deals.length_min <= ?")
             params.append(size_max)
-        clauses.append(f"({' OR '.join(length_conds)})")
+        if length_conds:
+            clauses.append(f"({' OR '.join(length_conds)})")
+    if reviewed_only:
+        clauses.append("dr.deal_id IS NOT NULL")
+
     where = " AND ".join(clauses)
 
     if count_only:
         async with aiosqlite.connect(db_path) as db:
             cursor = await db.execute(
-                f"SELECT COUNT(*) FROM deals WHERE {where}", params,
+                f"SELECT COUNT(*) FROM deals LEFT JOIN deal_reviews dr ON deals.id = dr.deal_id WHERE {where}",
+                params,
             )
             row = await cursor.fetchone()
         return row[0]
 
     sort_map = {
-        "discount_pct": "discount_pct DESC",
-        "price_low": "current_price ASC",
-        "price_high": "current_price DESC",
-        "store": "store ASC, discount_pct DESC",
-        "newest": "scraped_at DESC",
+        "discount_pct": "deals.discount_pct DESC",
+        "top_reviewed": "dr.score DESC NULLS LAST, deals.discount_pct DESC",
+        "price_low": "deals.current_price ASC",
+        "price_high": "deals.current_price DESC",
+        "store": "deals.store ASC, deals.discount_pct DESC",
+        "newest": "deals.scraped_at DESC",
     }
-    order = sort_map.get(sort_by, "discount_pct DESC")
+    order = sort_map.get(sort_by, "deals.discount_pct DESC")
 
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            f"SELECT * FROM deals WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?",
+            f"""\
+            SELECT deals.*, dr.score AS review_score, dr.award AS review_award,
+                   dr.review_url AS review_url
+            FROM deals
+            LEFT JOIN deal_reviews dr ON deals.id = dr.deal_id
+            WHERE {where}
+            ORDER BY {order}
+            LIMIT ? OFFSET ?
+            """,
             (*params, limit, offset),
         )
         rows = await cursor.fetchall()
@@ -206,6 +279,11 @@ async def query_deals(
             length_min=row["length_min"],
             length_max=row["length_max"],
             scraped_at=datetime.fromisoformat(row["scraped_at"]),
+            image_url=row["image_url"],
+            brand=row["brand"],
+            review_score=row["review_score"],
+            review_award=row["review_award"],
+            review_url=row["review_url"],
         )
         for row in rows
     ]
@@ -250,7 +328,7 @@ async def get_all_reviews(db_path: Path = DB_PATH) -> list[dict]:
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT product_name, brand, score, award, review_url, category FROM reviews ORDER BY score DESC"
+            "SELECT id, product_name, brand, score, award, review_url, category FROM reviews ORDER BY score DESC"
         )
         rows = await cursor.fetchall()
     return [dict(row) for row in rows]

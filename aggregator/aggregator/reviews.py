@@ -693,3 +693,57 @@ def match_review_to_deal(
     if best_family_score >= family_threshold and best_family_review is not None:
         return best_family_review
     return None
+
+
+async def compute_and_store_deal_reviews(db_path=None) -> int:
+    """Match all deals against reviews and persist results in the deal_reviews table.
+
+    Should be called after upsert_deals() or upsert_reviews() so results stay fresh.
+    Returns the number of matches stored.
+    """
+    from aggregator.db import get_all_reviews, upsert_deal_reviews, DB_PATH
+    import aiosqlite
+
+    if db_path is None:
+        db_path = DB_PATH
+
+    # Load all reviews
+    review_rows = await get_all_reviews(db_path)
+    if not review_rows:
+        return 0
+
+    reviews = [
+        ReviewData(
+            product_name=r["product_name"],
+            brand=r["brand"],
+            score=r["score"],
+            award=r["award"],
+            url=r["review_url"],
+            category=r["category"],
+        )
+        for r in review_rows
+    ]
+    review_id_map = {r["review_url"]: r["id"] for r in review_rows}
+
+    # Load all deals (id, name only — we only need these for matching)
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id, name FROM deals")
+        deal_rows = await cursor.fetchall()
+
+    matched: list[dict] = []
+    for deal_row in deal_rows:
+        match = match_review_to_deal(deal_row["name"], reviews)
+        if match:
+            matched.append({
+                "deal_id": deal_row["id"],
+                "review_id": review_id_map.get(match.url, 0),
+                "score": match.score,
+                "award": match.award,
+                "review_url": match.url,
+            })
+
+    if matched:
+        await upsert_deal_reviews(matched, db_path)
+
+    return len(matched)

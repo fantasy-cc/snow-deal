@@ -12,8 +12,9 @@ from datetime import datetime, timedelta
 
 from aggregator.auth import is_public_mode
 from aggregator.config import CATEGORY_RULES, STORES
-from aggregator.db import count_with_length, get_all_reviews, get_brands, query_deals, store_status
-from aggregator.reviews import ReviewData, match_review_to_deal
+from aggregator.db import (
+    count_with_length, get_brands, get_category_counts, query_deals, store_status,
+)
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
@@ -25,42 +26,6 @@ TAX_FREE_STORES = {s.name for s in STORES if s.tax_free}
 STORE_DOMAINS = {s.name: s.domain for s in STORES}
 # Stores that price in CAD
 CAD_STORES = {s.name for s in STORES if s.currency == "CAD"}
-
-# Cached review data — loaded once, refreshed on server restart
-_reviews_cache: list[ReviewData] | None = None
-
-
-async def _get_reviews() -> list[ReviewData]:
-    """Load reviews from DB, cached in memory."""
-    global _reviews_cache
-    if _reviews_cache is None:
-        rows = await get_all_reviews()
-        _reviews_cache = [
-            ReviewData(
-                product_name=r["product_name"],
-                brand=r["brand"],
-                score=r["score"],
-                award=r["award"],
-                url=r["review_url"],
-                category=r["category"],
-            )
-            for r in rows
-        ]
-    return _reviews_cache
-
-
-def _attach_reviews(deals: list, reviews: list[ReviewData]) -> dict:
-    """Match reviews to deals, return a dict of deal_id -> review info."""
-    review_map: dict[int, dict] = {}
-    for deal in deals:
-        match = match_review_to_deal(deal.name, reviews)
-        if match:
-            review_map[deal.id] = {
-                "score": match.score,
-                "award": match.award,
-                "url": match.url,
-            }
-    return review_map
 
 
 async def _build_store_statuses() -> list[dict]:
@@ -115,47 +80,17 @@ async def _fetch_deals(
     reviewed: str,
     offset: int = 0,
     count: bool = True,
-) -> tuple[list, bool, int | None, dict]:
-    """Shared query logic: fetch deals page, optional count, and review matches."""
+) -> tuple[list, bool, int | None]:
+    """Fetch a page of deals. Reviews are pre-joined via deal_reviews table."""
     tax_free_only = tax_free == "1"
     reviewed_only = reviewed == "1"
-
-    # For "top_reviewed" sort or "reviewed_only" filter, we fetch more and filter in Python
-    if sort == "top_reviewed" or reviewed_only:
-        all_deals = await query_deals(
-            category=category, store=store, brand=brand, min_discount=min_discount,
-            sort_by="discount_pct", limit=10000, offset=0,
-            tax_free_only=tax_free_only, tax_free_stores=TAX_FREE_STORES,
-            q=q, size_min=size_min, size_max=size_max,
-        )
-        reviews = await _get_reviews()
-        review_map = {}
-        for deal in all_deals:
-            match = match_review_to_deal(deal.name, reviews)
-            if match:
-                review_map[deal.id] = {
-                    "score": match.score,
-                    "award": match.award,
-                    "url": match.url,
-                }
-        if reviewed_only:
-            all_deals = [d for d in all_deals if d.id in review_map]
-        if sort == "top_reviewed":
-            all_deals.sort(key=lambda d: review_map.get(d.id, {}).get("score", 0), reverse=True)
-
-        deal_count = len(all_deals) if count else None
-        deals = all_deals[offset:offset + PAGE_SIZE]
-        has_more = len(all_deals) > offset + PAGE_SIZE
-        # Filter review_map to only include current page deals
-        page_ids = {d.id for d in deals}
-        review_map = {k: v for k, v in review_map.items() if k in page_ids}
-        return deals, has_more, deal_count, review_map
 
     deals = await query_deals(
         category=category, store=store, brand=brand, min_discount=min_discount,
         sort_by=sort, limit=PAGE_SIZE + 1, offset=offset,
         tax_free_only=tax_free_only, tax_free_stores=TAX_FREE_STORES,
         q=q, size_min=size_min, size_max=size_max,
+        reviewed_only=reviewed_only,
     )
     has_more = len(deals) > PAGE_SIZE
     deals = deals[:PAGE_SIZE]
@@ -164,15 +99,13 @@ async def _fetch_deals(
     if count:
         deal_count = await query_deals(
             category=category, store=store, brand=brand, min_discount=min_discount,
-            sort_by=sort, limit=10000,
+            sort_by=sort,
             tax_free_only=tax_free_only, tax_free_stores=TAX_FREE_STORES,
-            q=q, size_min=size_min, size_max=size_max, count_only=True,
+            q=q, size_min=size_min, size_max=size_max,
+            reviewed_only=reviewed_only, count_only=True,
         )
 
-    reviews = await _get_reviews()
-    review_map = _attach_reviews(deals, reviews) if reviews else {}
-
-    return deals, has_more, deal_count, review_map
+    return deals, has_more, deal_count
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -189,13 +122,16 @@ async def index(
     size_max: int | None = Query(None, alias="size_max"),
     reviewed: str = Query("", alias="reviewed"),
 ):
-    deals, has_more, deal_count, review_map = await _fetch_deals(
+    deals, has_more, deal_count = await _fetch_deals(
         category=category, store=store, brand=brand, min_discount=min_discount,
         sort=sort, tax_free=tax_free, q=q, size_min=size_min, size_max=size_max,
         reviewed=reviewed,
     )
     brands = await get_brands()
     length_count = await count_with_length()
+    category_counts = await get_category_counts()
+    store_statuses = await store_status()
+    store_counts = {s["store"]: s["deal_count"] for s in store_statuses}
 
     return templates.TemplateResponse(
         request=request, name="index.html",
@@ -207,7 +143,8 @@ async def index(
             "brands": brands,
             "tax_free_stores": TAX_FREE_STORES,
             "cad_stores": CAD_STORES,
-            "review_map": review_map,
+            "category_counts": category_counts,
+            "store_counts": store_counts,
             "current_category": category,
             "current_store": store,
             "current_brand": brand,
@@ -275,7 +212,7 @@ async def deals_fragment(
 ):
     """htmx partial — returns deal cards for dynamic filtering."""
     is_load_more = offset > 0
-    deals, has_more, deal_count, review_map = await _fetch_deals(
+    deals, has_more, deal_count = await _fetch_deals(
         category=category, store=store, brand=brand, min_discount=min_discount,
         sort=sort, tax_free=tax_free, q=q, size_min=size_min, size_max=size_max,
         reviewed=reviewed, offset=offset, count=not is_load_more,
@@ -286,6 +223,5 @@ async def deals_fragment(
         request=request, name=template,
         context={"deals": deals, "deal_count": deal_count,
                  "tax_free_stores": TAX_FREE_STORES, "cad_stores": CAD_STORES,
-                 "review_map": review_map,
                  "has_more": has_more, "next_offset": offset + PAGE_SIZE},
     )

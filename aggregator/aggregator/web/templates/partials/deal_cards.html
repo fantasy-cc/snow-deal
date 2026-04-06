@@ -19,5 +19,9 @@
     {% endif %}
 </div>
 {% else %}
-<div class="empty-state">No deals found. Try adjusting filters or run <code>snow-deals-agg refresh</code>.</div>
+<div class="empty-state">
+    <div style="font-size:2rem;margin-bottom:0.75rem">⛷️</div>
+    <div style="font-weight:600;font-size:1.05rem;color:var(--text-secondary);margin-bottom:0.4rem">No deals found</div>
+    <div>Try adjusting the filters above, or check back after the next scrape.</div>
+</div>
 {% endif %}

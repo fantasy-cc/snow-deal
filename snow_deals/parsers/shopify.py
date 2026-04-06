@@ -54,6 +54,14 @@ class ShopifyParser(BaseParser):
                     if val and val not in ("Default Title",) and val not in sizes:
                         sizes.append(val)
 
+            # Extract first product image URL
+            image_url = None
+            images = item.get("images") or []
+            if images:
+                image_url = images[0].get("src")
+            elif item.get("image"):
+                image_url = item["image"].get("src")
+
             products.append(Product(
                 name=item.get("title", "Unknown"),
                 url=f"{origin}/products/{item.get('handle', '')}",
@@ -61,6 +69,7 @@ class ShopifyParser(BaseParser):
                 original_price=original_price,
                 sizes=sizes or None,
                 product_type=item.get("product_type") or None,
+                image_url=image_url,
             ))
 
         log.info("Parsed %d products from %s", len(products), page_url)

@@ -49,11 +49,13 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
                 card.querySelectorAll('.product-thumb-price').forEach(el => {{
                     if (!el.classList.contains('slash')) salePriceEl = el;
                 }});
+                const imgEl = card.querySelector('img');
                 return {{
                     name: nameEl ? nameEl.textContent.trim() : (linkEl ? linkEl.textContent.trim() : ''),
                     url: linkEl ? linkEl.href : '',
                     current_price: parsePrice(salePriceEl) || parsePrice(origPriceEl),
                     original_price: parsePrice(origPriceEl),
+                    image_url: imgEl ? (imgEl.getAttribute('data-src') || imgEl.src || null) : null,
                 }};
             }});
         }}""",
@@ -84,9 +86,11 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
                     }
                 });
                 if (!name) return;
+                const imgEl = card.querySelector('img[alt]') || card.querySelector('img');
                 results.push({
                     name, url: link.href, current_price: currentPrice,
                     original_price: originalPrice !== currentPrice ? originalPrice : null,
+                    image_url: imgEl ? (imgEl.getAttribute('data-src') || imgEl.src || null) : null,
                 });
             });
             return results;
@@ -109,9 +113,11 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
                 if (data.percentOff && data.percentOff > 0) {
                     originalPrice = Math.round(data.price / (1 - data.percentOff / 100) * 100) / 100;
                 }
+                const imgEl = t.querySelector('img');
                 results.push({
                     name: data.name, url: linkEl ? linkEl.href : '',
                     current_price: data.price, original_price: originalPrice,
+                    image_url: imgEl ? (imgEl.getAttribute('data-src') || imgEl.src || null) : null,
                 });
             });
             return results;
@@ -136,9 +142,11 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
                 const origEl = card.querySelector('.price--non-sale, .price--rrp');
                 const current = parsePrice(currentEl);
                 if (!current) return;
+                const imgEl = card.querySelector('img');
                 results.push({{
                     name, url: linkEl ? linkEl.href : '',
                     current_price: current, original_price: parsePrice(origEl),
+                    image_url: imgEl ? (imgEl.getAttribute('data-src') || imgEl.src || null) : null,
                 }});
             }});
             return results;
@@ -168,11 +176,13 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
                 const origPriceEl = card.querySelector(
                     '.old-price .price, [class*="old"], [class*="original"], [class*="compare"], s, del'
                 );
+                const imgEl = card.querySelector('img');
                 return {
                     name: nameEl ? nameEl.textContent.trim() : '',
                     url: linkEl ? linkEl.href : '',
                     current_price: parsePrice(salePriceEl),
                     original_price: parsePrice(origPriceEl),
+                    image_url: imgEl ? (imgEl.getAttribute('data-src') || imgEl.src || null) : null,
                 };
             });
         }""",
@@ -195,6 +205,7 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
                     name, url: card.getAttribute('data-url') || '',
                     current_price: price,
                     original_price: (!isNaN(oldPrice) && oldPrice > 0 && oldPrice !== price) ? oldPrice : null,
+                    image_url: img ? (img.getAttribute('data-src') || img.src || null) : null,
                 });
             });
             return results;
@@ -214,11 +225,13 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
                 const delEl = card.querySelector('p.price del .woocommerce-Price-amount, del .woocommerce-Price-amount');
                 const insEl = card.querySelector('p.price ins .woocommerce-Price-amount, ins .woocommerce-Price-amount');
                 const singleEl = card.querySelector('p.price .woocommerce-Price-amount, .woocommerce-Price-amount');
+                const imgEl = card.querySelector('img');
                 return {{
                     name: nameEl ? nameEl.textContent.trim() : '',
                     url: linkEl ? linkEl.href : '',
                     current_price: parsePrice(insEl) || parsePrice(singleEl),
                     original_price: parsePrice(delEl),
+                    image_url: imgEl ? (imgEl.getAttribute('data-src') || imgEl.src || null) : null,
                 }};
             }});
         }}""",
@@ -258,12 +271,15 @@ def _parse_raw_products(raw: list[dict], base_url: str) -> list[Product]:
         if original_price is not None and original_price <= 0:
             original_price = None
 
+        image_url = (item.get("image_url") or "").strip() or None
+
         products.append(
             Product(
                 name=name,
                 url=url,
                 current_price=round(current_price, 2),
                 original_price=round(original_price, 2) if original_price else None,
+                image_url=image_url,
             )
         )
     return products

@@ -49,11 +49,10 @@ def isolated_app(tmp_path, monkeypatch):
     monkeypatch.setattr(app_module, "init_db", _init_test_db)
     monkeypatch.setattr(routes_module, "query_deals", partial(db_module.query_deals, db_path=deals_db))
     monkeypatch.setattr(routes_module, "get_brands", partial(db_module.get_brands, db_path=deals_db))
+    monkeypatch.setattr(routes_module, "get_category_counts", partial(db_module.get_category_counts, db_path=deals_db))
     monkeypatch.setattr(routes_module, "count_with_length", partial(db_module.count_with_length, db_path=deals_db))
     monkeypatch.setattr(routes_module, "store_status", partial(db_module.store_status, db_path=deals_db))
-    monkeypatch.setattr(routes_module, "get_all_reviews", partial(db_module.get_all_reviews, db_path=deals_db))
 
-    routes_module._reviews_cache = None
     auth_db_module._conn = None
     auth_db_module.TURSO_URL = ""
     auth_db_module.TURSO_AUTH_TOKEN = ""

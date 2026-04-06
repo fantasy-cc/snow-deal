@@ -1,4 +1,4 @@
-<div class="deal-card{% if review_map and d.id in review_map and review_map[d.id].score >= 80 %} reviewed-high{% elif review_map and d.id in review_map %} reviewed{% endif %}"
+<div class="deal-card{% if d.review_score is not none and d.review_score >= 80 %} reviewed-high{% elif d.review_score is not none %} reviewed{% endif %}"
      data-href="{{ d.url }}" data-scraped="{{ d.scraped_at.isoformat() }}"
      onclick="window.open(this.dataset.href, '_blank')" style="cursor:pointer">
     {% if d.discount_pct >= 30 %}
@@ -8,6 +8,13 @@
     {% elif d.discount_pct > 0 %}
     <span class="badge low">-{{ d.discount_pct|int }}%</span>
     {% endif %}
+    <div class="card-image">
+        {% if d.image_url %}
+        <img src="{{ d.image_url }}" alt="{{ d.name }}" loading="lazy">
+        {% else %}
+        <div class="card-image-placeholder"></div>
+        {% endif %}
+    </div>
     <div class="card-body">
         <div class="name">{{ d.name }}</div>
         <div class="meta">
@@ -19,15 +26,17 @@
             <span class="tax-free-tag">Tax Free</span>
             {% endif %}
         </div>
-        {% if review_map and d.id in review_map %}
+        {% if d.review_score is not none %}
         <div class="review-row">
-            <span class="review-score score-{{ 'high' if review_map[d.id].score >= 80 else ('mid' if review_map[d.id].score >= 60 else 'low') }}">
-                {{ review_map[d.id].score }}/100
+            <span class="review-score score-{{ 'high' if d.review_score >= 80 else ('mid' if d.review_score >= 60 else 'low') }}">
+                {{ d.review_score }}/100
             </span>
-            {% if review_map[d.id].award %}
-            <span class="review-award">{{ review_map[d.id].award }}</span>
+            {% if d.review_award %}
+            <span class="review-award">{{ d.review_award }}</span>
             {% endif %}
-            <a href="{{ review_map[d.id].url }}" class="review-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">Read review</a>
+            {% if d.review_url %}
+            <a href="{{ d.review_url }}" class="review-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">Read review</a>
+            {% endif %}
         </div>
         {% endif %}
         <div class="prices">

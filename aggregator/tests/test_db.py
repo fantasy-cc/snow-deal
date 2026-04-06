@@ -98,14 +98,16 @@ class TestDB:
     def test_brand_query(self, db_path):
         async def _run():
             await init_db(db_path)
-            await upsert_deals([
-                _make_deal("Atomic Bent 100", url="https://example.com/atomic"),
-                _make_deal("Salomon QST 98", url="https://example.com/salomon"),
-            ], db_path)
+            # brand column is populated at scrape time via _extract_brand; set explicitly here
+            atomic = _make_deal("Atomic Bent 100", url="https://example.com/atomic")
+            atomic.brand = "atomic"
+            salomon = _make_deal("Salomon QST 98", url="https://example.com/salomon")
+            salomon.brand = "salomon"
+            await upsert_deals([atomic, salomon], db_path)
 
             brands = await get_brands(db_path)
-            assert "Atomic" in brands
-            assert "Salomon" in brands
+            assert "atomic" in brands
+            assert "salomon" in brands
 
         asyncio.run(_run())
 

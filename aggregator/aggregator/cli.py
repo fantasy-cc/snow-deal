@@ -95,6 +95,11 @@ def fetch_reviews(delay: float, source: str, max_reviews: int | None) -> None:
 
         console.print(f"[bold green]Total: {total} reviews saved to database.[/bold green]")
 
+        with console.status("[bold cyan]Computing review matches...", spinner="dots"):
+            from aggregator.reviews import compute_and_store_deal_reviews
+            matched = await compute_and_store_deal_reviews()
+        console.print(f"[green]Matched {matched} deals to reviews.[/green]")
+
     asyncio.run(_run())
 
 

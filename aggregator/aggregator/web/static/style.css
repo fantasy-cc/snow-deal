@@ -524,6 +524,32 @@ h1 {
     border-color: var(--border-hover);
 }
 
+/* ---- Card Image ---- */
+
+.card-image {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: #0f172a;
+    flex-shrink: 0;
+}
+
+.card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 8px;
+    display: block;
+}
+
+.card-image-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #111827 0%, #0f172a 100%);
+}
+
+/* ---- Card Body ---- */
+
 .card-body {
     padding: 0.85rem 0.9rem 0.9rem;
     flex: 1;
@@ -777,6 +803,22 @@ h1 {
     flex-direction: row;
     align-items: center;
     border-radius: var(--radius-sm);
+}
+
+#deal-grid.compact-view .card-image {
+    width: 64px;
+    height: 64px;
+    aspect-ratio: unset;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+#deal-grid.compact-view .card-image img {
+    padding: 4px;
+}
+
+#deal-grid.compact-view .card-image-placeholder {
+    display: none;
 }
 
 #deal-grid.compact-view .card-body {

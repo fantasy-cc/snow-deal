@@ -10,6 +10,7 @@ from datetime import datetime
 import httpx
 
 from aggregator.categorizer import categorize, is_excluded
+from aggregator.reviews import _extract_brand
 from aggregator.config import STORES, StoreConfig
 from aggregator.models import AggregatedDeal
 from snow_deals.models import Product
@@ -159,6 +160,8 @@ def _products_to_deals(
                 length_min=length_min,
                 length_max=length_max,
                 scraped_at=now,
+                image_url=p.image_url,
+                brand=_extract_brand(p.name) or None,
             )
         )
     return deals
