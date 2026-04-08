@@ -39,11 +39,11 @@ jobs:
 
       - name: Upload deals.db to public data repo
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
         run: |
           # Upload to the public data repo so Render can download without auth
+          # Requires a PAT (DATA_REPO_TOKEN) with repo scope for the target repo
           gh release delete latest-data --yes --repo lifan-builds/snow-deal-data 2>/dev/null || true
-          gh api -X DELETE repos/lifan-builds/snow-deal-data/git/refs/tags/latest-data 2>/dev/null || true
           gh release create latest-data \
             aggregator/deals.db \
             --repo lifan-builds/snow-deal-data \
