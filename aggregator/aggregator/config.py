@@ -267,6 +267,21 @@ STORES: list[StoreConfig] = [
         parser_type="shopify",
     ),
 
+    # REI — custom Vue.js site, browser-based with anti-bot
+    StoreConfig(
+        "REI", "rei.com",
+        scrape_urls=[
+            "https://www.rei.com/c/downhill-skis/f/scd-deals",
+            "https://www.rei.com/c/snowboards/f/scd-deals",
+            "https://www.rei.com/c/downhill-ski-boots/f/scd-deals",
+            "https://www.rei.com/c/snowboard-boots/f/scd-deals",
+            "https://www.rei.com/c/downhill-ski-bindings/f/scd-deals",
+            "https://www.rei.com/c/snowboard-bindings/f/scd-deals",
+        ],
+        parser_type="rei",
+        use_browser=True,
+    ),
+
     # Headless Shopify (Hydrogen/Oxygen) — browser-based
     StoreConfig(
         "Ski Essentials", "skiessentials.com",

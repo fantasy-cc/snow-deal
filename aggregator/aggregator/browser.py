@@ -241,9 +241,7 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
         }}""",
         "a.next.page-numbers, a[rel='next']",
     ),
-}
 
-# Aliases — stores sharing the same extraction logic
     "skiessentials": (
         '[data-testid="product-card-title"]',
         """() => {
@@ -278,6 +276,48 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
         }""",
         None,  # No pagination — all products load on one page
     ),
+
+    "rei": (
+        '[data-ui="product-title"]',
+        """() => {
+            const seen = new Set();
+            const results = [];
+            document.querySelectorAll('[data-ui="product-title"]').forEach(titleEl => {
+                let card = titleEl;
+                while (card && card.tagName !== 'LI') card = card.parentElement;
+                if (!card) return;
+                const linkEl = card.querySelector('a[href*="/product/"]');
+                if (!linkEl) return;
+                const href = linkEl.getAttribute('href');
+                if (seen.has(href)) return;
+                seen.add(href);
+                const brandEl = card.querySelector('[data-ui="product-brand"]');
+                const name = ((brandEl ? brandEl.textContent.trim() + ' ' : '') + titleEl.textContent.trim()).trim();
+                const spans = card.querySelectorAll('span');
+                let currentPrice = null;
+                let originalPrice = null;
+                for (const span of spans) {
+                    const text = span.textContent.trim();
+                    if (text.match(/^\$[\d,.]+$/)) {
+                        const price = parseFloat(text.replace(/[$,]/g, ''));
+                        if (!currentPrice) currentPrice = price;
+                        else if (!originalPrice) originalPrice = price;
+                    }
+                }
+                const imgEl = card.querySelector('img[id^="image-"]');
+                if (!currentPrice) return;
+                results.push({
+                    name,
+                    url: linkEl.href.startsWith('http') ? linkEl.href : 'https://www.rei.com' + href,
+                    current_price: currentPrice,
+                    original_price: originalPrice,
+                    image_url: imgEl ? imgEl.src : null,
+                });
+            });
+            return results;
+        }""",
+        None,  # Rely on _try_next_page fallback which handles ?page=N URL patterns
+    ),
 }
 
 # Aliases — stores sharing the same extraction logic
@@ -286,7 +326,7 @@ STORE_CONFIGS["peterglenn"] = STORE_CONFIGS["bigcommerce"]
 STORE_CONFIGS["alpineshopvt"] = STORE_CONFIGS["bigcommerce"]
 
 # Anti-bot stores need longer timeouts
-_ANTI_BOT_TYPES = {"evo", "backcountry", "levelnine", "corbetts"}
+_ANTI_BOT_TYPES = {"evo", "backcountry", "levelnine", "corbetts", "rei"}
 
 
 # ---------------------------------------------------------------------------
