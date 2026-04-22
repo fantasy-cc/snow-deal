@@ -159,38 +159,39 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
     ),
 
     "levelnine": (
-        '.product-item, [class*="product-card"], [class*="product-item"]',
+        'script#__NEXT_DATA__',
         """() => {
-            const parsePrice = (el) => {
-                if (!el) return null;
-                const txt = el.textContent.replace(/[^0-9.]/g, '');
-                const val = parseFloat(txt);
-                return isNaN(val) ? null : val;
-            };
-            return Array.from(document.querySelectorAll(
-                '.product-item, [class*="product-card"], [class*="product-item"], .grid-item'
-            )).map(card => {
-                const linkEl = card.querySelector('a[href]');
-                const nameEl = card.querySelector(
-                    '.product-item-name, [class*="product-name"], [class*="title"], h2, h3'
-                );
-                const salePriceEl = card.querySelector(
-                    '.special-price .price, [class*="sale"], [class*="special"], .price'
-                );
-                const origPriceEl = card.querySelector(
-                    '.old-price .price, [class*="old"], [class*="original"], [class*="compare"], s, del'
-                );
-                const imgEl = card.querySelector('img');
-                return {
-                    name: nameEl ? nameEl.textContent.trim() : '',
-                    url: linkEl ? linkEl.href : '',
-                    current_price: parsePrice(salePriceEl),
-                    original_price: parsePrice(origPriceEl),
-                    image_url: imgEl ? (imgEl.getAttribute('data-src') || imgEl.src || null) : null,
-                };
-            });
+            const el = document.getElementById('__NEXT_DATA__');
+            if (!el) return [];
+            try {
+                const data = JSON.parse(el.textContent);
+                const apollo = data.props.pageProps.__APOLLO_STATE__;
+                if (!apollo) return [];
+                const products = [];
+                for (const [key, val] of Object.entries(apollo)) {
+                    if (!key.startsWith('Product:') || !val.name) continue;
+                    // Skip products that aren't in stock (e.g. OUT_OF_STOCK).
+                    if (val.stockStatus && val.stockStatus !== 'IN_STOCK') continue;
+                    const agg = val.aggregates;
+                    if (!agg || !agg.minSalePrice) continue;
+                    const salePrice = agg.minSalePrice;
+                    const listPrice = agg.minListPrice;
+                    const url = val.url || '';
+                    const color = Array.isArray(val.colors) && val.colors[0];
+                    const imgPath = color ? (color.tileImage || color.pliImage) : null;
+                    const brand = val.brand && val.brand.name ? val.brand.name : '';
+                    products.push({
+                        name: (brand ? brand + ' ' : '') + val.name,
+                        url: url.startsWith('http') ? url : 'https://www.levelninesports.com' + url,
+                        current_price: salePrice,
+                        original_price: (listPrice && listPrice > salePrice) ? listPrice : null,
+                        image_url: imgPath ? 'https://content.backcountry.com' + imgPath : null,
+                    });
+                }
+                return products;
+            } catch(e) { return []; }
         }""",
-        'a.next, a[rel="next"], .pages-item-next a',
+        'a:has-text("Next Page")',
     ),
 
     "thecircle": (
@@ -320,48 +321,35 @@ STORE_CONFIGS: dict[str, tuple[str, str, str | None]] = {
     ),
 
     "mec": (
-        '[class*="hitTitle"]',
+        'script#__NEXT_DATA__',
         """() => {
-            const parsePrice = (el) => {
-                if (!el) return null;
-                const m = el.textContent.match(/[\d,]+\.?\d*/);
-                return m ? parseFloat(m[0].replace(/,/g, '')) : null;
-            };
-            const seen = new Set();
-            const results = [];
-            document.querySelectorAll('article').forEach(card => {
-                const linkEl = card.querySelector('a[href*="/product/"]');
-                if (!linkEl) return;
-                const href = linkEl.getAttribute('href');
-                if (seen.has(href)) return;
-                seen.add(href);
-                const nameEl = card.querySelector('[class*="hitTitle"]');
-                const pricesEl = card.querySelector('[class*="hitPrices"]');
-                if (!pricesEl) return;
-                const spans = pricesEl.querySelectorAll('span');
-                let currentPrice = null;
-                let originalPrice = null;
-                for (const span of spans) {
-                    const cls = span.className || '';
-                    const price = parsePrice(span);
-                    if (!price) continue;
-                    if (cls.includes('OldPrice') || cls.includes('oldPrice')) {
-                        originalPrice = price;
-                    } else if (!currentPrice) {
-                        currentPrice = price;
+            const el = document.getElementById('__NEXT_DATA__');
+            if (!el) return [];
+            try {
+                const data = JSON.parse(el.textContent);
+                const results = data.props.pageProps.serverState.initialResults.products_en.results;
+                const products = [];
+                for (const group of results) {
+                    for (const hit of (group.hits || [])) {
+                        const title = (hit.title || '').trim();
+                        const urlPath = hit.url || '';
+                        const salePrice = hit.salePrice;
+                        if (!title || !urlPath || !salePrice || salePrice <= 0) continue;
+                        // Skip items that aren't available (e.g. OUT_OF_STOCK / NO_INVENTORY).
+                        const invStatus = hit.inventoryStatus;
+                        if (invStatus && invStatus !== 'IN_STOCK' && invStatus !== 'LOW_STOCK') continue;
+                        const price = hit.price;
+                        products.push({
+                            name: title,
+                            url: urlPath.startsWith('http') ? urlPath : 'https://www.mec.ca' + urlPath,
+                            current_price: salePrice,
+                            original_price: (price && price > salePrice) ? price : null,
+                            image_url: hit.image || hit.swatch || null,
+                        });
                     }
                 }
-                const imgEl = card.querySelector('img');
-                if (!currentPrice) return;
-                results.push({
-                    name: nameEl ? nameEl.textContent.trim() : (imgEl ? imgEl.alt : ''),
-                    url: linkEl.href.startsWith('http') ? linkEl.href : 'https://www.mec.ca' + href,
-                    current_price: currentPrice,
-                    original_price: originalPrice,
-                    image_url: imgEl ? imgEl.src : null,
-                });
-            });
-            return results;
+                return products;
+            } catch(e) { return []; }
         }""",
         '.ais-Pagination-item--nextPage a',
     ),
@@ -373,7 +361,7 @@ STORE_CONFIGS["peterglenn"] = STORE_CONFIGS["bigcommerce"]
 STORE_CONFIGS["alpineshopvt"] = STORE_CONFIGS["bigcommerce"]
 
 # Anti-bot stores need longer timeouts
-_ANTI_BOT_TYPES = {"evo", "backcountry", "levelnine", "corbetts", "rei"}
+_ANTI_BOT_TYPES = {"evo", "backcountry", "levelnine", "corbetts", "rei", "mec", "thehouse"}
 
 
 # ---------------------------------------------------------------------------
@@ -437,7 +425,9 @@ async def _try_next_page(page: Page, next_selector: str | None) -> bool:
                 return True
             if await el.is_visible():
                 if href:
-                    await page.goto(href, wait_until="domcontentloaded")
+                    # Resolve relative URLs via the element's .href property
+                    abs_href = await el.evaluate("el => el.href")
+                    await page.goto(abs_href or href, wait_until="domcontentloaded")
                     return True
                 await el.click()
                 await page.wait_for_load_state("domcontentloaded")
@@ -533,7 +523,9 @@ async def scrape_with_browser(
 
                 for page_num in range(1, max_pages + 1):
                     try:
-                        await page.wait_for_selector(wait_selector, timeout=selector_timeout)
+                        # Use "attached" state for non-visible elements (e.g. <script>)
+                        wait_state = "attached" if wait_selector.startswith("script") else "visible"
+                        await page.wait_for_selector(wait_selector, timeout=selector_timeout, state=wait_state)
                     except Exception:
                         log.warning("[%s] Timeout waiting for products (page %d)", store_name, page_num)
                         break

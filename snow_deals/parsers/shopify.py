@@ -38,14 +38,25 @@ class ShopifyParser(BaseParser):
         origin = f"{urlparse(page_url).scheme}://{urlparse(page_url).netloc}"
 
         for item in data.get("products", []):
-            variant = item.get("variants", [{}])[0] if item.get("variants") else {}
+            variants = item.get("variants") or []
+            # Skip products with no available variants — they're sold out.
+            # Shopify variants have `available: bool`; if the field is missing
+            # we assume available (some themes omit it).
+            if variants and not any(v.get("available", True) for v in variants):
+                continue
+
+            # Prefer a live variant for pricing so out-of-stock leads don't skew it.
+            variant = next(
+                (v for v in variants if v.get("available", True)),
+                variants[0] if variants else {},
+            )
             price = float(variant.get("price", 0))
             compare = variant.get("compare_at_price")
             original_price = float(compare) if compare else None
 
             # Extract available sizes from variants
             sizes: list[str] = []
-            for v in item.get("variants", []):
+            for v in variants:
                 if not v.get("available", True):
                     continue
                 # Size is typically option1 or option2; check option names

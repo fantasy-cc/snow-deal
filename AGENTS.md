@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**FreshPowder** (repo: `snow-deal`) is a ski & snowboard deal aggregator that tracks prices across 15+ North American retailers every 6 hours, matches expert review scores from OutdoorGearLab and GoodRide, and surfaces the best deals through a fast, filterable web interface. The app is invite-gated for controlled growth, with a public marketing landing page. A secondary Tampermonkey userscript and Python CLI exist for single-site browsing.
+**FreshPowder** (repo: `snow-deal`) is a ski & snowboard deal aggregator that tracks prices across 20+ North American retailers every 6 hours, matches expert review scores from OutdoorGearLab and GoodRide, and surfaces the best deals through a fast, filterable web interface. The app is invite-gated for controlled growth, with a public marketing landing page. A secondary Tampermonkey userscript and Python CLI exist for single-site browsing.
 
 **Live at:** https://snow-deals.onrender.com
 
@@ -14,7 +14,7 @@
 - **Database:** SQLite (deals), Turso cloud (auth/sessions/events)
 - **Auth:** JWT-based invite codes, rate limiting
 - **Deployment:** Docker on Render (free tier)
-- **Scraping:** GitHub Actions cron (every 6h), httpx + BeautifulSoup4/lxml
+- **Scraping:** GitHub Actions cron (every 6h), httpx + BeautifulSoup4/lxml, Playwright (for JS-rendered/anti-bot sites)
 - **Reviews:** OutdoorGearLab + GoodRide score matching
 
 ### Tampermonkey Userscript (secondary — `tampermonkey/`)
@@ -30,6 +30,7 @@ snow-deal/
 ├── aggregator/                    # Main product — FreshPowder web app
 │   ├── aggregator/
 │   │   ├── config.py              # Stores, categories, keywords, model names, brands
+│   │   ├── browser.py             # Playwright browser scraping (JS-rendered sites)
 │   │   ├── categorizer.py         # Product categorization engine
 │   │   ├── db.py                  # SQLite queries (deals, aggregation)
 │   │   ├── auth_db.py             # Turso auth DB (invite codes, sessions, events, waitlist)

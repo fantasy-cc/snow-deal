@@ -157,7 +157,12 @@ async def get_brands(db_path: Path = DB_PATH) -> list[str]:
     """Return distinct brand names from the brand column, sorted."""
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
-            "SELECT DISTINCT brand FROM deals WHERE brand IS NOT NULL AND brand != '' ORDER BY brand"
+            """
+            SELECT DISTINCT brand FROM deals
+            WHERE brand IS NOT NULL AND brand != ''
+              AND scraped_at = (SELECT MAX(d2.scraped_at) FROM deals d2 WHERE d2.store = deals.store)
+            ORDER BY brand
+            """
         )
         rows = await cursor.fetchall()
     return [row[0] for row in rows if row[0]]
@@ -167,7 +172,12 @@ async def get_category_counts(db_path: Path = DB_PATH) -> dict[str, int]:
     """Return {category: deal_count} for all non-null categories."""
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute(
-            "SELECT category, COUNT(*) FROM deals WHERE category IS NOT NULL GROUP BY category"
+            """
+            SELECT category, COUNT(*) FROM deals
+            WHERE category IS NOT NULL
+              AND scraped_at = (SELECT MAX(d2.scraped_at) FROM deals d2 WHERE d2.store = deals.store)
+            GROUP BY category
+            """
         )
         rows = await cursor.fetchall()
     return {row[0]: row[1] for row in rows}
@@ -194,7 +204,12 @@ async def query_deals(
     db_path: Path = DB_PATH,
 ) -> list[AggregatedDeal] | int:
     """Query deals with optional filters. If count_only=True, returns int."""
-    clauses: list[str] = ["deals.discount_pct >= ?"]
+    clauses: list[str] = [
+        "deals.discount_pct >= ?",
+        # Hide stale deals: a product not re-observed in the latest scrape for its
+        # store has an older scraped_at and is likely out-of-stock or delisted.
+        "deals.scraped_at = (SELECT MAX(d2.scraped_at) FROM deals d2 WHERE d2.store = deals.store)",
+    ]
     params: list[object] = [min_discount]
 
     if min_price > 0:

@@ -23,6 +23,11 @@ class SacredRideParser(BaseParser):
         products: list[Product] = []
 
         for card in soup.select("li.product"):
+            # WooCommerce adds the `outofstock` class to the product <li>
+            # when the item is not purchasable. Skip those.
+            classes = card.get("class") or []
+            if "outofstock" in classes or "out-of-stock" in classes:
+                continue
             product = self._parse_card(card, page_url)
             if product:
                 products.append(product)

@@ -24,7 +24,7 @@ def db_path(tmp_path):
     return tmp_path / "test.db"
 
 
-def _make_deal(name="Atomic Bent 100", store="Evo", price=499.99, orig=599.99, **kw):
+def _make_deal(name="Atomic Bent 100", store="Evo", price=499.99, orig=599.99, scraped_at=None, **kw):
     return AggregatedDeal(
         id=None,
         store=store,
@@ -37,7 +37,7 @@ def _make_deal(name="Atomic Bent 100", store="Evo", price=499.99, orig=599.99, *
         sizes=kw.get("sizes"),
         length_min=kw.get("length_min"),
         length_max=kw.get("length_max"),
-        scraped_at=datetime.now(),
+        scraped_at=scraped_at or datetime.now(),
     )
 
 
@@ -99,9 +99,10 @@ class TestDB:
         async def _run():
             await init_db(db_path)
             # brand column is populated at scrape time via _extract_brand; set explicitly here
-            atomic = _make_deal("Atomic Bent 100", url="https://example.com/atomic")
+            now = datetime.now()
+            atomic = _make_deal("Atomic Bent 100", url="https://example.com/atomic", scraped_at=now)
             atomic.brand = "atomic"
-            salomon = _make_deal("Salomon QST 98", url="https://example.com/salomon")
+            salomon = _make_deal("Salomon QST 98", url="https://example.com/salomon", scraped_at=now)
             salomon.brand = "salomon"
             await upsert_deals([atomic, salomon], db_path)
 
@@ -135,9 +136,10 @@ class TestDB:
     def test_store_status(self, db_path):
         async def _run():
             await init_db(db_path)
+            now = datetime.now()
             await upsert_deals([
-                _make_deal("Atomic Bent 100", "Evo"),
-                _make_deal("Salomon QST 98", "Evo", url="https://example.com/qst"),
+                _make_deal("Atomic Bent 100", "Evo", scraped_at=now),
+                _make_deal("Salomon QST 98", "Evo", url="https://example.com/qst", scraped_at=now),
             ], db_path)
 
             statuses = await store_status(db_path)
@@ -150,9 +152,10 @@ class TestDB:
     def test_text_search(self, db_path):
         async def _run():
             await init_db(db_path)
+            now = datetime.now()
             await upsert_deals([
-                _make_deal("Atomic Bent 100"),
-                _make_deal("Salomon QST 98", url="https://example.com/qst"),
+                _make_deal("Atomic Bent 100", scraped_at=now),
+                _make_deal("Salomon QST 98", url="https://example.com/qst", scraped_at=now),
             ], db_path)
 
             results = await query_deals(q="Bent", db_path=db_path)
@@ -164,9 +167,10 @@ class TestDB:
     def test_min_discount_filter(self, db_path):
         async def _run():
             await init_db(db_path)
+            now = datetime.now()
             await upsert_deals([
-                _make_deal("Big Discount", price=300, orig=600),  # 50% off
-                _make_deal("Small Discount", price=550, orig=600, url="https://example.com/small"),  # ~8% off
+                _make_deal("Big Discount", price=300, orig=600, scraped_at=now),  # 50% off
+                _make_deal("Small Discount", price=550, orig=600, url="https://example.com/small", scraped_at=now),  # ~8% off
             ], db_path)
 
             results = await query_deals(min_discount=20, db_path=db_path)

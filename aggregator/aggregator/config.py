@@ -142,6 +142,14 @@ STORES: list[StoreConfig] = [
             "https://www.evo.com/shop/snowboard/snowboards",
             "https://www.evo.com/shop/sale/ski/skis",
             "https://www.evo.com/shop/sale/snowboard/snowboards",
+            "https://www.evo.com/shop/ski/ski-gloves",
+            "https://www.evo.com/shop/ski/ski-mittens",
+            "https://www.evo.com/shop/snowboard/gloves",
+            "https://www.evo.com/shop/snowboard/mittens",
+            "https://www.evo.com/shop/sale/ski/ski-gloves",
+            "https://www.evo.com/shop/sale/ski/ski-mittens",
+            "https://www.evo.com/shop/sale/snowboard/gloves",
+            "https://www.evo.com/shop/sale/snowboard/mittens",
         ],
         parser_type="evo",
         use_browser=True,
@@ -267,7 +275,7 @@ STORES: list[StoreConfig] = [
         parser_type="shopify",
     ),
 
-    # MEC — Canadian outdoor retailer, Next.js + Algolia InstantSearch
+    # MEC — Canadian outdoor retailer, Next.js + Algolia (browser needed for AWS WAF)
     StoreConfig(
         "MEC", "mec.ca",
         scrape_urls=[
@@ -278,20 +286,21 @@ STORES: list[StoreConfig] = [
         tax_free=True, currency="CAD",
     ),
 
-    # REI — custom Vue.js site, browser-based with anti-bot
-    StoreConfig(
-        "REI", "rei.com",
-        scrape_urls=[
-            "https://www.rei.com/c/downhill-skis/f/scd-deals",
-            "https://www.rei.com/c/snowboards/f/scd-deals",
-            "https://www.rei.com/c/downhill-ski-boots/f/scd-deals",
-            "https://www.rei.com/c/snowboard-boots/f/scd-deals",
-            "https://www.rei.com/c/downhill-ski-bindings/f/scd-deals",
-            "https://www.rei.com/c/snowboard-bindings/f/scd-deals",
-        ],
-        parser_type="rei",
-        use_browser=True,
-    ),
+    # REI — blocked by Akamai from datacenter/CI IPs (ERR_HTTP2_PROTOCOL_ERROR).
+    # Disabled until a proxy or API-based approach is available.
+    # StoreConfig(
+    #     "REI", "rei.com",
+    #     scrape_urls=[
+    #         "https://www.rei.com/c/downhill-skis/f/scd-deals",
+    #         "https://www.rei.com/c/snowboards/f/scd-deals",
+    #         "https://www.rei.com/c/downhill-ski-boots/f/scd-deals",
+    #         "https://www.rei.com/c/snowboard-boots/f/scd-deals",
+    #         "https://www.rei.com/c/downhill-ski-bindings/f/scd-deals",
+    #         "https://www.rei.com/c/snowboard-bindings/f/scd-deals",
+    #     ],
+    #     parser_type="rei",
+    #     use_browser=True,
+    # ),
 
     # Headless Shopify (Hydrogen/Oxygen) — browser-based
     StoreConfig(
