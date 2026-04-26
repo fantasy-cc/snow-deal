@@ -2,8 +2,8 @@ name: Scrape Deals
 
 on:
   schedule:
-    # Run every 6 hours
-    - cron: "0 */6 * * *"
+    # Run once a day at midnight to stay within GitHub Actions free tier limits (2000 min/mo)
+    - cron: "0 0 * * *"
   workflow_dispatch: # Allow manual trigger
 
 permissions:
